@@ -182,9 +182,9 @@
                             'alunos': {
                                 columns: [
                                     { name: 'id', type: 'INT', pk: true, autoIncrement: true },
-                                    { name: 'nome', type: 'VARCHAR(100)', pk: false },
-                                    { name: 'idade', type: 'INT', pk: false },
-                                    { name: 'curso', type: 'VARCHAR(50)', pk: false }
+                                    { name: 'nome', type: 'VARCHAR(100)', pk: false, autoIncrement: false },
+                                    { name: 'idade', type: 'INT', pk: false, autoIncrement: false },
+                                    { name: 'curso', type: 'VARCHAR(50)', pk: false, autoIncrement: false }
                                 ],
                                 data: [
                                     { id: 1, nome: 'Ana Silva', idade: 20, curso: 'Informatica' },
@@ -372,7 +372,7 @@
 
                 let columnsToInsert = colsRaw 
                     ? colsRaw.split(',').map(c => c.trim().replace(/`/g, ''))
-                    : table.columns.map(c => c.name);
+                    : [];
 
                 let valuesToInsert = valsRaw.split(',').map(v => {
                     v = v.trim();
@@ -384,27 +384,42 @@
                     return v;
                 });
 
+                // Se as colunas não foram passadas explicitamente
+                if (!colsRaw) {
+                    columnsToInsert = table.columns.map(c => c.name);
+                }
+
                 if (columnsToInsert.length !== valuesToInsert.length) {
                     throw new Error("A contagem de colunas não corresponde à contagem de valores.");
                 }
 
                 let newRow = {};
-                
-                // Inicializa a linha com AUTO_INCREMENT ou NULL
+
+                // 1. Inicialização de todas as colunas da tabela
                 table.columns.forEach(col => {
-                    if (col.autoIncrement) {
-                        const maxId = table.data.reduce((max, r) => Math.max(max, r[col.name] || 0), 0);
-                        newRow[col.name] = maxId + 1;
-                    } else {
-                        newRow[col.name] = null;
-                    }
+                    newRow[col.name] = null;
                 });
 
-                // Atribui valores especificados (Case-Insensitive para nomes de colunas)
+                // 2. Preenchimento das colunas informadas no INSERT
                 columnsToInsert.forEach((colNameInput, idx) => {
                     const actualCol = table.columns.find(c => c.name.toLowerCase() === colNameInput.toLowerCase());
                     if (!actualCol) throw new Error(`Coluna desconhecida '${colNameInput}' na tabela '${tableName}'`);
                     newRow[actualCol.name] = valuesToInsert[idx];
+                });
+
+                // 3. Processamento e cálculo das colunas AUTO_INCREMENT
+                table.columns.forEach(col => {
+                    if (col.autoIncrement) {
+                        const currentValue = newRow[col.name];
+                        // Se o valor não foi fornecido, for NULL ou 0, calcula o próximo ID
+                        if (currentValue === null || currentValue === undefined || currentValue === 0) {
+                            const maxId = table.data.reduce((max, r) => {
+                                const val = Number(r[col.name]);
+                                return !isNaN(val) && val > max ? val : max;
+                            }, 0);
+                            newRow[col.name] = maxId + 1;
+                        }
+                    }
                 });
 
                 table.data.push(newRow);
@@ -944,13 +959,13 @@
                 sql: "create database empresa;\nuse EMPRESA;\nshow databases;"
             },
             {
-                title: "2. Criando Tabelas",
-                desc: "Crie uma tabela definindo tipos de dados como INT e VARCHAR.",
+                title: "2. Criando Tabelas com AUTO_INCREMENT",
+                desc: "Crie uma tabela com chave primária autoincrementável.",
                 sql: "use empresa;\n\ncreate table funcionarios (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  nome VARCHAR(100),\n  cargo VARCHAR(50),\n  salario INT\n);"
             },
             {
-                title: "3. Inserindo Dados (INSERT)",
-                desc: "Adicione novos registros na tabela de funcionários.",
+                title: "3. Inserindo Dados (INSERT sem informar ID)",
+                desc: "Adicione novos registros omitindo o ID para testar o AUTO_INCREMENT automático.",
                 sql: "use empresa;\n\ninsert into FUNCIONARIOS (nome, cargo, salario) values ('João Silva', 'Desenvolvedor', 5000);\ninsert into funcionarios (NOME, CARGO, SALARIO) values ('Maria Santos', 'Designer', 4200);\nINSERT INTO funcionarios (nome, cargo, salario) VALUES ('Pedro Rocha', 'Gerente', 8000);"
             },
             {
