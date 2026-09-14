@@ -326,13 +326,28 @@
                 this.databases = {
                     'escola': {
                         tables: {
+                            'produtos': {
+                                columns: [
+                                    { name: 'id_produto', type: 'INT', pk: true, autoIncrement: true, notNull: true },
+                                    { name: 'nome_produto', type: 'VARCHAR(100)', pk: false, autoIncrement: false, notNull: true },
+                                    { name: 'quantidade', type: 'INT', pk: false, autoIncrement: false, notNull: true },
+                                    { name: 'fabricante', type: 'VARCHAR(100)', pk: false, autoIncrement: false, notNull: true },
+                                    { name: 'preco', type: 'DECIMAL(10,2)', pk: false, autoIncrement: false, notNull: true }
+                                ],
+                                checkConstraints: ['quantidade >= 0', 'preco >= 0'],
+                                data: [
+                                    { id_produto: 1, nome_produto: 'Mouse Gamer', quantidade: 50, fabricante: 'Logitech', preco: 150.00 },
+                                    { id_produto: 2, nome_produto: 'Teclado Mecânico', quantidade: 20, fabricante: 'Redragon', preco: 320.50 }
+                                ]
+                            },
                             'alunos': {
                                 columns: [
-                                    { name: 'id', type: 'INT', pk: true, autoIncrement: true },
-                                    { name: 'nome', type: 'VARCHAR(100)', pk: false, autoIncrement: false },
-                                    { name: 'idade', type: 'INT', pk: false, autoIncrement: false },
-                                    { name: 'curso', type: 'VARCHAR(50)', pk: false, autoIncrement: false }
+                                    { name: 'id', type: 'INT', pk: true, autoIncrement: true, notNull: true },
+                                    { name: 'nome', type: 'VARCHAR(100)', pk: false, autoIncrement: false, notNull: false },
+                                    { name: 'idade', type: 'INT', pk: false, autoIncrement: false, notNull: false },
+                                    { name: 'curso', type: 'VARCHAR(50)', pk: false, autoIncrement: false, notNull: false }
                                 ],
+                                checkConstraints: [],
                                 data: [
                                     { id: 1, nome: 'Ana Silva', idade: 20, curso: 'Informatica' },
                                     { id: 2, nome: 'Carlos Souza', idade: 22, curso: 'Edificacoes' },
@@ -358,6 +373,126 @@
                 return keys.find(k => k.toLowerCase() === searchKey.toLowerCase()) || null;
             }
 
+            // Utilitário para dividir declarações respeitando parênteses internos ex: DECIMAL(10,2) e CHECK(...)
+            splitByComma(str) {
+                const result = [];
+                let current = '';
+                let depth = 0;
+                let inQuotes = false;
+                let quoteChar = '';
+
+                for (let i = 0; i < str.length; i++) {
+                    const char = str[i];
+                    if (inQuotes) {
+                        current += char;
+                        if (char === quoteChar) inQuotes = false;
+                    } else if (char === "'" || char === '"' || char === '`') {
+                        inQuotes = true;
+                        quoteChar = char;
+                        current += char;
+                    } else if (char === '(') {
+                        depth++;
+                        current += char;
+                    } else if (char === ')') {
+                        depth--;
+                        current += char;
+                    } else if (char === ',' && depth === 0) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                if (current.trim()) {
+                    result.push(current.trim());
+                }
+                return result;
+            }
+
+            // Utilitário para extrair tuplas de valores no VALUES (ex: ('a', 1), ('b', 2))
+            parseValueTuples(str) {
+                const tuples = [];
+                let current = '';
+                let depth = 0;
+                let inQuotes = false;
+                let quoteChar = '';
+
+                for (let i = 0; i < str.length; i++) {
+                    const char = str[i];
+                    if (inQuotes) {
+                        current += char;
+                        if (char === quoteChar) inQuotes = false;
+                    } else if (char === "'" || char === '"' || char === '`') {
+                        inQuotes = true;
+                        quoteChar = char;
+                        current += char;
+                    } else if (char === '(') {
+                        if (depth > 0) current += char;
+                        depth++;
+                    } else if (char === ')') {
+                        depth--;
+                        if (depth > 0) current += char;
+                        else if (depth === 0) {
+                            tuples.push(current.trim());
+                            current = '';
+                        }
+                    } else {
+                        if (depth > 0) current += char;
+                    }
+                }
+                return tuples;
+            }
+
+            // Avaliador de Restrições CHECK
+            evaluateCheckExpression(row, table, checkExpr) {
+                let expr = checkExpr.trim();
+                if (expr.startsWith('(') && expr.endsWith(')')) {
+                    expr = expr.slice(1, -1).trim();
+                }
+
+                const match = expr.match(/`?(\w+)`?\s*(=|!=|<>|>=|<=|>|<|LIKE)\s*(.+)/i);
+                if (!match) return true;
+
+                const colInput = match[1];
+                const op = match[2].toUpperCase();
+                let rawVal = match[3].trim();
+
+                if ((rawVal.startsWith("'") && rawVal.endsWith("'")) || (rawVal.startsWith('"') && rawVal.endsWith('"'))) {
+                    rawVal = rawVal.slice(1, -1);
+                } else if (!isNaN(rawVal) && rawVal !== '') {
+                    rawVal = Number(rawVal);
+                }
+
+                const actualCol = table.columns.find(c => c.name.toLowerCase() === colInput.toLowerCase());
+                if (!actualCol) return true;
+
+                const rowVal = row[actualCol.name];
+
+                if (rowVal === null || rowVal === undefined) return false;
+
+                if (typeof rowVal === 'number' || !isNaN(rowVal)) {
+                    const numRowVal = Number(rowVal);
+                    const numRawVal = Number(rawVal);
+                    switch (op) {
+                        case '=': return numRowVal === numRawVal;
+                        case '!=':
+                        case '<>': return numRowVal !== numRawVal;
+                        case '>': return numRowVal > numRawVal;
+                        case '<': return numRowVal < numRawVal;
+                        case '>=': return numRowVal >= numRawVal;
+                        case '<=': return numRowVal <= numRawVal;
+                        default: return true;
+                    }
+                }
+
+                switch (op) {
+                    case '=': return String(rowVal) === String(rawVal);
+                    case '!=':
+                    case '<>': return String(rowVal) !== String(rawVal);
+                    default: return true;
+                }
+            }
+
             // Gera o comando CREATE TABLE DDL para a tabela
             generateCreateTableSQL(dbName, tableName) {
                 const dbKey = this.getCaseInsensitiveKey(this.databases, dbName);
@@ -374,8 +509,16 @@
                     let def = `  \`${c.name}\` ${c.type}`;
                     if (c.pk) def += ` PRIMARY KEY`;
                     if (c.autoIncrement) def += ` AUTO_INCREMENT`;
+                    if (c.notNull && !c.pk) def += ` NOT NULL`;
                     return def;
                 });
+
+                if (table.checkConstraints && table.checkConstraints.length > 0) {
+                    table.checkConstraints.forEach(chk => {
+                        colDefs.push(`  CHECK (${chk})`);
+                    });
+                }
+
                 sql += colDefs.join(',\n') + `\n);`;
 
                 return sql;
@@ -507,27 +650,52 @@
                         throw new Error(`Tabela '${tableName}' já existe.`);
                     }
 
-                    // Processamento de colunas
-                    const colDefs = body.split(',').map(c => c.trim());
+                    // Processamento de colunas utilizando splitByComma (suporta DECIMAL(10,2) e CHECK)
+                    const colDefs = this.splitByComma(body);
                     const columns = [];
+                    const checkConstraints = [];
 
                     for (let colDef of colDefs) {
-                        const parts = colDef.split(/\s+/);
+                        const upperDef = colDef.toUpperCase();
+
+                        if (upperDef.startsWith('CHECK')) {
+                            const checkMatch = colDef.match(/CHECK\s*\((.+)\)/i);
+                            if (checkMatch) {
+                                checkConstraints.push(checkMatch[1].trim());
+                            }
+                            continue;
+                        }
+
+                        if (upperDef.startsWith('PRIMARY KEY')) {
+                            continue;
+                        }
+
+                        let cleanDef = colDef;
+                        const inlineCheckMatch = colDef.match(/CHECK\s*\((.+)\)/i);
+                        if (inlineCheckMatch) {
+                            checkConstraints.push(inlineCheckMatch[1].trim());
+                            cleanDef = colDef.replace(/CHECK\s*\((.+)\)/i, '').trim();
+                        }
+
+                        const parts = cleanDef.split(/\s+/);
                         const cName = parts[0].replace(/`/g, '');
                         const cType = parts[1] ? parts[1].toUpperCase() : 'VARCHAR(255)';
-                        const isPk = colDef.toUpperCase().includes('PRIMARY KEY');
-                        const isAuto = colDef.toUpperCase().includes('AUTO_INCREMENT');
+                        const isPk = upperDef.includes('PRIMARY KEY');
+                        const isAuto = upperDef.includes('AUTO_INCREMENT');
+                        const isNotNull = upperDef.includes('NOT NULL');
 
                         columns.push({
                             name: cName,
                             type: cType,
                             pk: isPk,
-                            autoIncrement: isAuto
+                            autoIncrement: isAuto,
+                            notNull: isNotNull
                         });
                     }
 
                     tables[tableName] = {
                         columns: columns,
+                        checkConstraints: checkConstraints,
                         data: []
                     };
 
@@ -540,10 +708,10 @@
             handleInsert(sql) {
                 if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
 
-                const regex = /INSERT\s+INTO\s+`?(\w+)`?\s*(?:\(([^)]+)\))?\s*VALUES\s*\(([^)]+)\)/i;
+                const regex = /INSERT\s+INTO\s+`?(\w+)`?\s*(?:\(([^)]+)\))?\s*VALUES\s+([\s\S]+)/i;
                 const match = sql.match(regex);
 
-                if (!match) throw new Error("Sintaxe de INSERT incorreta. Exemplo: INSERT INTO tabela (col1) VALUES ('val1');");
+                if (!match) throw new Error("Sintaxe de INSERT incorreta. Exemplo: INSERT INTO tabela (col1) VALUES ('val1'), ('val2');");
 
                 const tableName = match[1];
                 const colsRaw = match[2];
@@ -557,58 +725,82 @@
 
                 let columnsToInsert = colsRaw 
                     ? colsRaw.split(',').map(c => c.trim().replace(/`/g, ''))
-                    : [];
+                    : table.columns.map(c => c.name);
 
-                let valuesToInsert = valsRaw.split(',').map(v => {
-                    v = v.trim();
-                    if ((v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) {
-                        return v.slice(1, -1);
+                const tupleStrings = this.parseValueTuples(valsRaw);
+                if (tupleStrings.length === 0) {
+                    throw new Error("Nenhum conjunto de valores especificado no comando INSERT.");
+                }
+
+                let insertedRows = [];
+
+                for (let tupleStr of tupleStrings) {
+                    let valuesToInsert = this.splitByComma(tupleStr).map(v => {
+                        v = v.trim();
+                        if ((v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) {
+                            return v.slice(1, -1);
+                        }
+                        if (!isNaN(v) && v !== '') return Number(v);
+                        if (v.toUpperCase() === 'NULL') return null;
+                        return v;
+                    });
+
+                    if (columnsToInsert.length !== valuesToInsert.length) {
+                        throw new Error(`A contagem de colunas (${columnsToInsert.length}) não corresponde à contagem de valores (${valuesToInsert.length}) em um dos registros.`);
                     }
-                    if (!isNaN(v) && v !== '') return Number(v);
-                    if (v.toUpperCase() === 'NULL') return null;
-                    return v;
-                });
 
-                // Se as colunas não foram passadas explicitamente
-                if (!colsRaw) {
-                    columnsToInsert = table.columns.map(c => c.name);
-                }
+                    let newRow = {};
 
-                if (columnsToInsert.length !== valuesToInsert.length) {
-                    throw new Error("A contagem de colunas não corresponde à contagem de valores.");
-                }
+                    // 1. Inicialização de todas as colunas
+                    table.columns.forEach(col => {
+                        newRow[col.name] = null;
+                    });
 
-                let newRow = {};
+                    // 2. Preenchimento das colunas do INSERT
+                    columnsToInsert.forEach((colNameInput, idx) => {
+                        const actualCol = table.columns.find(c => c.name.toLowerCase() === colNameInput.toLowerCase());
+                        if (!actualCol) throw new Error(`Coluna desconhecida '${colNameInput}' na tabela '${tableName}'`);
+                        newRow[actualCol.name] = valuesToInsert[idx];
+                    });
 
-                // 1. Inicialização de todas as colunas da tabela
-                table.columns.forEach(col => {
-                    newRow[col.name] = null;
-                });
+                    // 3. Processamento de AUTO_INCREMENT sequencial
+                    table.columns.forEach(col => {
+                        if (col.autoIncrement) {
+                            const currentValue = newRow[col.name];
+                            if (currentValue === null || currentValue === undefined || currentValue === 0) {
+                                const allRows = [...table.data, ...insertedRows];
+                                const maxId = allRows.reduce((max, r) => {
+                                    const val = Number(r[col.name]);
+                                    return !isNaN(val) && val > max ? val : max;
+                                }, 0);
+                                newRow[col.name] = maxId + 1;
+                            }
+                        }
+                    });
 
-                // 2. Preenchimento das colunas informadas no INSERT
-                columnsToInsert.forEach((colNameInput, idx) => {
-                    const actualCol = table.columns.find(c => c.name.toLowerCase() === colNameInput.toLowerCase());
-                    if (!actualCol) throw new Error(`Coluna desconhecida '${colNameInput}' na tabela '${tableName}'`);
-                    newRow[actualCol.name] = valuesToInsert[idx];
-                });
+                    // 4. Validação de NOT NULL
+                    table.columns.forEach(col => {
+                        if (col.notNull && !col.autoIncrement) {
+                            if (newRow[col.name] === null || newRow[col.name] === undefined) {
+                                throw new Error(`A coluna '${col.name}' não pode ser nula (NOT NULL).`);
+                            }
+                        }
+                    });
 
-                // 3. Processamento e cálculo das colunas AUTO_INCREMENT
-                table.columns.forEach(col => {
-                    if (col.autoIncrement) {
-                        const currentValue = newRow[col.name];
-                        // Se o valor não foi fornecido, for NULL ou 0, calcula o próximo ID
-                        if (currentValue === null || currentValue === undefined || currentValue === 0) {
-                            const maxId = table.data.reduce((max, r) => {
-                                const val = Number(r[col.name]);
-                                return !isNaN(val) && val > max ? val : max;
-                            }, 0);
-                            newRow[col.name] = maxId + 1;
+                    // 5. Validação de Restrições CHECK
+                    if (table.checkConstraints && table.checkConstraints.length > 0) {
+                        for (let checkExpr of table.checkConstraints) {
+                            if (!this.evaluateCheckExpression(newRow, table, checkExpr)) {
+                                throw new Error(`Restrição CHECK (${checkExpr}) falhou ao inserir o registro.`);
+                            }
                         }
                     }
-                });
 
-                table.data.push(newRow);
-                return { type: 'success', message: `1 linha inserida com sucesso em '${tableKey}'.` };
+                    insertedRows.push(newRow);
+                }
+
+                table.data.push(...insertedRows);
+                return { type: 'success', message: `${insertedRows.length} linha(s) inserida(s) com sucesso em '${tableKey}'.` };
             }
 
             handleSelect(sql) {
@@ -671,7 +863,6 @@
             handleUpdate(sql) {
                 if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
 
-                // Regex para capturar UPDATE ... SET ... [WHERE ...]
                 const regex = /UPDATE\s+`?(\w+)`?\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$/i;
                 const match = sql.match(regex);
 
@@ -687,7 +878,6 @@
 
                 const table = tables[tableKey];
 
-                // Extrai atribuições do SET (suporta múltiplas colunas separadas por vírgula)
                 const assignments = setClause.split(',').map(assign => {
                     const eqIndex = assign.indexOf('=');
                     if (eqIndex === -1) throw new Error(`Atribuição SET inválida: '${assign}'`);
@@ -712,8 +902,28 @@
                 let updatedCount = 0;
 
                 table.data.forEach(row => {
-                    // Executa avaliação do WHERE para cada linha
                     if (!whereClause || this.evaluateWhere(row, table, whereClause)) {
+                        const tempRow = { ...row };
+                        assignments.forEach(a => {
+                            tempRow[a.colName] = a.val;
+                        });
+
+                        // Validação de NOT NULL
+                        table.columns.forEach(col => {
+                            if (col.notNull && (tempRow[col.name] === null || tempRow[col.name] === undefined)) {
+                                throw new Error(`A coluna '${col.name}' não pode ser nula (NOT NULL).`);
+                            }
+                        });
+
+                        // Validação de CHECK
+                        if (table.checkConstraints && table.checkConstraints.length > 0) {
+                            for (let checkExpr of table.checkConstraints) {
+                                if (!this.evaluateCheckExpression(tempRow, table, checkExpr)) {
+                                    throw new Error(`Restrição CHECK (${checkExpr}) falhou na atualização.`);
+                                }
+                            }
+                        }
+
                         assignments.forEach(a => {
                             row[a.colName] = a.val;
                         });
@@ -1369,39 +1579,39 @@
 
         const lessons = [
             {
-                title: "1. Criando e Selecionando BD",
+                title: "1. Tabela Produtos com CHECK e NOT NULL",
+                desc: "Exemplo completo de validações de CHECK (quantidade e preço), NOT NULL e INSERT múltiplo.",
+                sql: "use escola;\n\n-- Inserção de múltiplos registros em um único INSERT:\nINSERT INTO produtos (nome_produto, quantidade, fabricante, preco)\nVALUES ('Cadeira Ergonomica', 15, 'Flexform', 899.90),\n       ('Cadeira Flex', 20, 'Flexform', 1899.90);\n\n-- Visualizar resultado:\nSELECT * FROM produtos;"
+            },
+            {
+                title: "2. Criando e Selecionando BD",
                 desc: "Aprenda a criar um novo banco de dados e defini-lo como ativo (testando minúsculas).",
                 sql: "create database empresa;\nuse EMPRESA;\nshow databases;"
             },
             {
-                title: "2. Criando Tabelas com AUTO_INCREMENT",
+                title: "3. Criando Tabelas com AUTO_INCREMENT",
                 desc: "Crie uma tabela com chave primária autoincrementável.",
                 sql: "use empresa;\n\ncreate table funcionarios (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  nome VARCHAR(100),\n  cargo VARCHAR(50),\n  salario INT\n);"
             },
             {
-                title: "3. Inserindo Dados (INSERT sem informar ID)",
+                title: "4. Inserindo Dados (INSERT sem informar ID)",
                 desc: "Adicione novos registros omitindo o ID para testar o AUTO_INCREMENT automático.",
                 sql: "use empresa;\n\ninsert into FUNCIONARIOS (nome, cargo, salario) values ('João Silva', 'Desenvolvedor', 5000);\ninsert into funcionarios (NOME, CARGO, SALARIO) values ('Maria Santos', 'Designer', 4200);\nINSERT INTO funcionarios (nome, cargo, salario) VALUES ('Pedro Rocha', 'Gerente', 8000);"
             },
             {
-                title: "4. Consultando Dados (SELECT)",
+                title: "5. Consultando Dados (SELECT)",
                 desc: "Realize buscas simples e com filtros utilizando cláusula WHERE insensível a maiúsculas.",
                 sql: "use empresa;\n\n-- Buscar todos os registros\nselect * from FUNCIONARIOS;\n\n-- Filtrar por cargo ou salário\nselect nome, cargo from funcionarios where cargo = 'desenvolvedor';"
             },
             {
-                title: "5. Atualizando Dados (UPDATE com WHERE)",
+                title: "6. Atualizando Dados (UPDATE com WHERE)",
                 desc: "Altere dados específicos com UPDATE e filtro WHERE funcionando perfeitamente.",
                 sql: "use empresa;\n\n-- Atualizar apenas quem tem o ID 1\nupdate funcionarios set salario = 6000 where id = 1;\n\n-- Atualizar cargo procurando nome em minúsculo\nUPDATE FUNCIONARIOS SET cargo = 'Líder Design' WHERE nome = 'maria santos';\n\nselect * from funcionarios;"
             },
             {
-                title: "6. Excluindo Dados (DELETE)",
+                title: "7. Excluindo Dados (DELETE)",
                 desc: "Remova registros específicos filtrando no WHERE.",
                 sql: "use empresa;\n\ndelete from funcionarios where id = 2;\n\nselect * from funcionarios;"
-            },
-            {
-                title: "7. Alterando Estrutura (ALTER TABLE)",
-                desc: "Adicione novas colunas em uma tabela existente.",
-                sql: "use empresa;\n\nalter table funcionarios add departamento VARCHAR(50);\n\nselect * from funcionarios;"
             }
         ];
 
