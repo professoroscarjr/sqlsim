@@ -1,246 +1,262 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="h-full bg-slate-950">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador SQL Interativo - MariaDB</title>
-    <!-- Tailwind CSS -->
+    <title>MariaDB SQL - Simulador Interativo & Ambiente Didático</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Fira Code & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        .code-font {
-            font-family: 'Fira Code', 'Courier New', Courier, monospace;
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
-        /* Barra de rolagem personalizada */
+        .code-font {
+            font-family: 'Fira Code', monospace;
+        }
         ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+            width: 7px;
+            height: 7px;
         }
         ::-webkit-scrollbar-track {
-            background: #1f2937;
+            background: #090d16;
         }
         ::-webkit-scrollbar-thumb {
-            background: #4b5563;
-            border-radius: 3px;
+            background: #273549;
+            border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #6b7280;
+            background: #3b4f6b;
+        }
+        .editor-line-numbers {
+            user-select: none;
+            text-align: right;
+            color: #475569;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.97); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(8px);
         }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 flex flex-col h-screen overflow-hidden font-sans">
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden antialiased select-none">
 
-    <!-- Cabeçalho / Barra de Navegação -->
-    <header class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between shrink-0">
+    <header class="bg-slate-900 border-b border-slate-800 px-5 py-2.5 flex items-center justify-between shrink-0 shadow-md z-10">
         <div class="flex items-center space-x-3">
-            <i class="fa-solid font-bold text-2xl text-teal-400 fa-database"></i>
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-teal-900/30">
+                <i class="fa-solid fa-database text-slate-950 text-xl font-bold"></i>
+            </div>
             <div>
-                <h1 class="text-lg font-bold tracking-wide text-white">MariaDB SQL Simulator</h1>
-                <p class="text-xs text-gray-400">Ambiente Didático de Aprendizado SQL (Case-Insensitive)</p>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-base font-bold tracking-wide text-white">MariaDB SQL Simulator</h1>
+                    <span class="text-[10px] uppercase tracking-wider font-bold bg-teal-950 text-teal-400 border border-teal-800/80 px-2 py-0.5 rounded-md">v3.0 Pro</span>
+                </div>
+                <p class="text-xs text-slate-400">Ambiente Didático de Aprendizado & Execução Relacional MariaDB</p>
             </div>
         </div>
-        <div class="flex items-center space-x-3">
-            <span id="active-db-badge" class="bg-teal-900/60 text-teal-300 text-xs px-3 py-1 rounded-full border border-teal-700/50 flex items-center gap-2">
+
+        <div class="flex items-center space-x-2.5">
+            <div id="active-db-badge" class="bg-slate-800/90 text-teal-300 text-xs px-3 py-1.5 rounded-lg border border-teal-900/60 flex items-center gap-2 shadow-inner">
                 <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
-                Nenhum BD selecionado
-            </span>
-            <button onclick="resetEngine()" class="px-3 py-1.5 text-xs bg-red-900/40 hover:bg-red-800/60 text-red-300 rounded border border-red-700/50 transition flex items-center gap-1">
-                <i class="fa-solid fa-rotate-right"></i> Reiniciar Banco
+                <span class="font-medium text-slate-400">BD Ativo:</span>
+                <span id="active-db-name" class="font-bold text-teal-300">Nenhum</span>
+            </div>
+
+            <button onclick="openERModal()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-teal-300 rounded-lg border border-slate-700 transition flex items-center gap-1.5 font-medium shadow-sm" title="Visualizar Diagrama Entidade-Relacionamento">
+                <i class="fa-solid fa-diagram-project text-teal-400"></i> Diagrama ER
             </button>
-            <button onclick="exportDatabase()" class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded border border-gray-600 transition flex items-center gap-1">
-                <i class="fa-solid fa-download"></i> Exportar SQL
+
+            <button onclick="exportDatabase()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition flex items-center gap-1.5 font-medium shadow-sm" title="Baixar script completo SQL com DDL e DML">
+                <i class="fa-solid fa-file-export text-emerald-400"></i> Exportar SQL
+            </button>
+
+            <button onclick="triggerImportSQL()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition flex items-center gap-1.5 font-medium shadow-sm" title="Carregar script SQL externo">
+                <i class="fa-solid fa-file-import text-blue-400"></i> Importar SQL
+            </button>
+            <input type="file" id="import-file-input" accept=".sql,.txt" class="hidden" onchange="handleFileImport(event)">
+
+            <button onclick="confirmResetEngine()" class="px-3 py-1.5 text-xs bg-red-950/70 hover:bg-red-900/90 text-red-300 rounded-lg border border-red-800/60 transition flex items-center gap-1.5 font-medium shadow-sm" title="Restaurar estado inicial do banco de dados">
+                <i class="fa-solid fa-rotate-right"></i> Reiniciar
             </button>
         </div>
     </header>
 
-    <!-- Área Principal de Conteúdo -->
-    <div class="flex flex-1 overflow-hidden">
+    <div class="flex flex-1 overflow-hidden relative">
         
-        <!-- Barra Lateral Esquerda: Estrutura do BD, Exercícios e Legenda de Tipos -->
-        <aside class="w-80 bg-gray-800/80 border-r border-gray-700 flex flex-col shrink-0">
+        <!-- Barra Lateral Esquerda -->
+        <aside class="w-80 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 select-none">
             <!-- Abas da Barra Lateral -->
-            <div class="flex border-b border-gray-700 text-xs font-semibold">
-                <button id="tab-explorer-btn" onclick="switchSidebarTab('explorer')" class="flex-1 py-3 text-center border-b-2 border-teal-400 text-teal-400 bg-gray-800/50 transition">
-                    <i class="fa-solid fa-sitemap block sm:inline mb-1 sm:mb-0"></i> Estrutura
+            <div class="flex border-b border-slate-800 text-xs font-semibold bg-slate-950/60">
+                <button id="tab-explorer-btn" onclick="switchSidebarTab('explorer')" class="flex-1 py-3 text-center border-b-2 border-teal-400 text-teal-400 bg-slate-900 transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-sitemap"></i> Estrutura
                 </button>
-                <button id="tab-lessons-btn" onclick="switchSidebarTab('lessons')" class="flex-1 py-3 text-center border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
-                    <i class="fa-solid fa-graduation-cap block sm:inline mb-1 sm:mb-0"></i> Exercícios
+                <button id="tab-lessons-btn" onclick="switchSidebarTab('lessons')" class="flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-graduation-cap"></i> Desafios
                 </button>
-                <button id="tab-datatypes-btn" onclick="switchSidebarTab('datatypes')" class="flex-1 py-3 text-center border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
-                    <i class="fa-solid fa-book block sm:inline mb-1 sm:mb-0"></i> Tipos Dados
+                <button id="tab-datatypes-btn" onclick="switchSidebarTab('datatypes')" class="flex-1 py-3 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-book-open"></i> Referência
                 </button>
             </div>
 
-            <!-- Conteúdo da Aba 1: Navegador de Bancos de Dados -->
-            <div id="tab-explorer" class="flex-1 overflow-y-auto p-4 space-y-3">
-                <div class="flex items-center justify-between text-xs font-bold text-gray-400 uppercase tracking-wider">
-                    <span>Bancos de Dados</span>
-                    <button onclick="refreshExplorer()" class="hover:text-teal-400 transition" title="Atualizar Visualização">
+            <div id="tab-explorer" class="flex-1 overflow-y-auto p-3 space-y-3">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+                    <span>Bancos & Tabelas</span>
+                    <button onclick="refreshExplorer()" class="hover:text-teal-400 text-slate-500 transition p-1" title="Atualizar Árvore">
                         <i class="fa-solid fa-arrows-rotate"></i>
                     </button>
                 </div>
-                <div id="db-tree" class="space-y-2 text-sm">
-                    <!-- Árvore dinâmica do BD gerada via JS -->
+                <div id="db-tree" class="space-y-1.5 text-sm">
+                    <!-- Gerado dinamicamente via JS -->
                 </div>
             </div>
 
-            <!-- Conteúdo da Aba 2: Roteiro Prático -->
-            <div id="tab-lessons" class="flex-1 overflow-y-auto p-4 space-y-4 hidden">
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Roteiro Prático</h3>
-                
-                <div class="space-y-3" id="lessons-list">
+            <div id="tab-lessons" class="flex-1 overflow-y-auto p-3 space-y-3 hidden">
+                <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+                    <span>Exercícios Interativos</span>
+                    <span id="lesson-progress-badge" class="text-[10px] bg-teal-950 text-teal-300 border border-teal-800/80 px-2 py-0.5 rounded-full font-mono">0/7 Concluídos</span>
+                </div>
+                <div class="space-y-2.5" id="lessons-list">
                     <!-- Lições renderizadas via JS -->
                 </div>
             </div>
 
-            <!-- Conteúdo da Aba 3: Legenda de Tipos de Dados -->
-            <div id="tab-datatypes" class="flex-1 overflow-y-auto p-4 space-y-4 hidden">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Legenda de Tipos em SQL</h3>
-                    <span class="text-[10px] bg-teal-900/80 text-teal-300 px-2 py-0.5 rounded border border-teal-700/50">MariaDB / MySQL</span>
+            <div id="tab-datatypes" class="flex-1 overflow-y-auto p-3 space-y-3 hidden text-xs">
+                <div class="flex items-center justify-between px-1">
+                    <h3 class="font-bold text-slate-400 uppercase tracking-wider">Sintaxe MariaDB</h3>
+                    <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">Cheatsheet</span>
                 </div>
 
-                <div class="space-y-3 text-xs">
-                    <!-- Numéricos -->
-                    <div class="bg-gray-800/60 border border-gray-700/60 rounded p-3 space-y-2">
-                        <div class="font-bold text-teal-300 flex items-center gap-1.5 border-b border-gray-700/50 pb-1">
-                            <i class="fa-solid fa-hashtag text-teal-400"></i> Tipos Numéricos
-                        </div>
-                        <div class="space-y-2">
-                            <div>
-                                <span class="font-mono text-emerald-400 font-bold">INT</span> ou <span class="font-mono text-emerald-400 font-bold">INTEGER</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Números inteiros positivos ou negativos sem casas decimais (Ex: <code class="bg-gray-900 px-1 rounded text-teal-200">10</code>, <code class="bg-gray-900 px-1 rounded text-teal-200">-50</code>).</p>
-                            </div>
-                            <div>
-                                <span class="font-mono text-emerald-400 font-bold">BIGINT</span> / <span class="font-mono text-emerald-400 font-bold">SMALLINT</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Variações para inteiros extremamente grandes ou pequenos.</p>
-                            </div>
-                            <div>
-                                <span class="font-mono text-emerald-400 font-bold">DECIMAL(p,s)</span> / <span class="font-mono text-emerald-400 font-bold">NUMERIC</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Números exatos com casas decimais. Ex: <code class="bg-gray-900 px-1 rounded text-teal-200">DECIMAL(10,2)</code> para moedas (Ex: <code class="bg-gray-900 px-1 rounded text-teal-200">1250.50</code>).</p>
-                            </div>
-                            <div>
-                                <span class="font-mono text-emerald-400 font-bold">FLOAT</span> / <span class="font-mono text-emerald-400 font-bold">DOUBLE</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Números decimais de ponto flutuante de precisão simples ou dupla.</p>
-                            </div>
-                        </div>
+                <!-- Tipos Numéricos -->
+                <div class="bg-slate-850/60 border border-slate-800 rounded-lg p-3 space-y-1.5 bg-slate-950/40">
+                    <div class="font-bold text-teal-400 flex items-center gap-1.5 border-b border-slate-800 pb-1">
+                        <i class="fa-solid fa-hashtag"></i> Tipos Numéricos
                     </div>
+                    <p><code class="text-emerald-400 font-bold font-mono">INT / INTEGER</code>: Inteiros ex: <code class="text-slate-300">10, -500</code></p>
+                    <p><code class="text-emerald-400 font-bold font-mono">DECIMAL(p,s)</code>: Valores exatos ex: <code class="text-slate-300">DECIMAL(10,2)</code></p>
+                    <p><code class="text-emerald-400 font-bold font-mono">FLOAT / DOUBLE</code>: Ponto flutuante</p>
+                </div>
 
-                    <!-- Texto / Strings -->
-                    <div class="bg-gray-800/60 border border-gray-700/60 rounded p-3 space-y-2">
-                        <div class="font-bold text-amber-300 flex items-center gap-1.5 border-b border-gray-700/50 pb-1">
-                            <i class="fa-solid fa-font text-amber-400"></i> Tipos de Texto
-                        </div>
-                        <div class="space-y-2">
-                            <div>
-                                <span class="font-mono text-emerald-400 font-bold">VARCHAR(n)</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Texto de tamanho **variável** de até <code class="bg-gray-900 px-1 rounded text-amber-200">n</code> caracteres. Ex: <code class="bg-gray-900 px-1 rounded text-amber-200">VARCHAR(100)</code> para nomes.</p>
-                            </div>
-                            <div>
-                                <span class="font-mono text-emerald-400 font-bold">CHAR(n)</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Texto de tamanho **fixo**. Preenche espaços em branco se for menor. Ex: <code class="bg-gray-900 px-1 rounded text-amber-200">CHAR(2)</code> para sigla de UF ('SP', 'RJ').</p>
-                            </div>
-                            <div>
-                                <span class="font-mono text-emerald-400 font-bold">TEXT</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Blocos longos de texto (descrições, artigos) sem limite fixo predefinido.</p>
-                            </div>
-                        </div>
+                <!-- Tipos Texto -->
+                <div class="bg-slate-850/60 border border-slate-800 rounded-lg p-3 space-y-1.5 bg-slate-950/40">
+                    <div class="font-bold text-amber-400 flex items-center gap-1.5 border-b border-slate-800 pb-1">
+                        <i class="fa-solid fa-font"></i> Tipos de Texto
                     </div>
+                    <p><code class="text-emerald-400 font-bold font-mono">VARCHAR(n)</code>: Texto tamanho variável</p>
+                    <p><code class="text-emerald-400 font-bold font-mono">CHAR(n)</code>: Texto tamanho fixo ex: UF <code class="text-slate-300">'SP'</code></p>
+                    <p><code class="text-emerald-400 font-bold font-mono">TEXT</code>: Blocos de texto longo</p>
+                </div>
 
-                    <!-- Data e Hora -->
-                    <div class="bg-gray-800/60 border border-gray-700/60 rounded p-3 space-y-2">
-                        <div class="font-bold text-blue-300 flex items-center gap-1.5 border-b border-gray-700/50 pb-1">
-                            <i class="fa-solid fa-calendar-days text-blue-400"></i> Data e Hora
-                        </div>
-                        <div class="space-y-2">
-                            <div>
-                                <span class="font-mono text-emerald-400 font-bold">DATE</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Armazena apenas data no formato <code class="bg-gray-900 px-1 rounded text-blue-200">YYYY-MM-DD</code>. Ex: <code class="bg-gray-900 px-1 rounded text-blue-200">'2026-09-02'</code>.</p>
-                            </div>
-                            <div>
-                                <span class="font-mono text-emerald-400 font-bold">TIME</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Armazena horário no formato <code class="bg-gray-900 px-1 rounded text-blue-200">HH:MM:SS</code>.</p>
-                            </div>
-                            <div>
-                                <span class="font-mono text-emerald-400 font-bold">DATETIME</span> / <span class="font-mono text-emerald-400 font-bold">TIMESTAMP</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Combina data e hora: <code class="bg-gray-900 px-1 rounded text-blue-200">YYYY-MM-DD HH:MM:SS</code>.</p>
-                            </div>
-                        </div>
+                <!-- Datas -->
+                <div class="bg-slate-850/60 border border-slate-800 rounded-lg p-3 space-y-1.5 bg-slate-950/40">
+                    <div class="font-bold text-blue-400 flex items-center gap-1.5 border-b border-slate-800 pb-1">
+                        <i class="fa-solid fa-calendar-days"></i> Data e Hora
                     </div>
+                    <p><code class="text-emerald-400 font-bold font-mono">DATE</code>: Data <code class="text-slate-300">'YYYY-MM-DD'</code></p>
+                    <p><code class="text-emerald-400 font-bold font-mono">DATETIME</code>: Data/Hora <code class="text-slate-300">'YYYY-MM-DD HH:MM:SS'</code></p>
+                </div>
 
-                    <!-- Modificadores e Atributos -->
-                    <div class="bg-gray-800/60 border border-gray-700/60 rounded p-3 space-y-2">
-                        <div class="font-bold text-purple-300 flex items-center gap-1.5 border-b border-gray-700/50 pb-1">
-                            <i class="fa-solid fa-key text-purple-400"></i> Modificadores e Regras
-                        </div>
-                        <div class="space-y-2">
-                            <div>
-                                <span class="font-mono text-purple-300 font-bold">PRIMARY KEY</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Identificador único exclusivo de um registro na tabela.</p>
-                            </div>
-                            <div>
-                                <span class="font-mono text-purple-300 font-bold">AUTO_INCREMENT</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Gera valores numéricos sequenciais automaticamente a cada novo registro.</p>
-                            </div>
-                            <div>
-                                <span class="font-mono text-purple-300 font-bold">NOT NULL</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Impede que o campo fique sem preenchimento (vazio).</p>
-                            </div>
-                            <div>
-                                <span class="font-mono text-purple-300 font-bold">BOOLEAN</span> / <span class="font-mono text-purple-300 font-bold">BOOL</span>
-                                <p class="text-gray-400 text-[11px] mt-0.5">Valores lógicos Verdadeiro/Falso (Internamente mapeado como 1 ou 0).</p>
-                            </div>
-                        </div>
+                <!-- Modificadores -->
+                <div class="bg-slate-850/60 border border-slate-800 rounded-lg p-3 space-y-1.5 bg-slate-950/40">
+                    <div class="font-bold text-purple-400 flex items-center gap-1.5 border-b border-slate-800 pb-1">
+                        <i class="fa-solid fa-key"></i> Modificadores & Regras
                     </div>
+                    <p><code class="text-purple-300 font-bold font-mono">PRIMARY KEY</code>: Chave primária</p>
+                    <p><code class="text-purple-300 font-bold font-mono">AUTO_INCREMENT</code>: Sequência automática</p>
+                    <p><code class="text-purple-300 font-bold font-mono">NOT NULL</code>: Preenchimento obrigatório</p>
+                    <p><code class="text-purple-300 font-bold font-mono">CHECK (expr)</code>: Validação de valor</p>
                 </div>
             </div>
         </aside>
 
-        <!-- Lado Direito: Editor e Resultados -->
-        <main class="flex-1 flex flex-col min-w-0 bg-gray-900">
+        <main class="flex-1 flex flex-col min-w-0 bg-slate-950">
             
-            <!-- Seção do Editor SQL -->
-            <div class="flex-1 flex flex-col min-h-0 border-b border-gray-700 relative">
-                <!-- Barra de Ferramentas e Abas de Consulta (Estilo HeidiSQL) -->
-                <div class="bg-gray-900 border-b border-gray-700 flex items-center justify-between px-2 pt-1.5 shrink-0 overflow-x-auto">
-                    <!-- Container de Abas Dinâmicas -->
+            <!-- Editor SQL superior -->
+            <div class="flex-1 flex flex-col min-h-0 border-b border-slate-800 relative">
+                
+                <!-- Barra de Abas do Editor -->
+                <div class="bg-slate-900 border-b border-slate-800 flex items-center justify-between px-2 pt-1.5 shrink-0 overflow-x-auto">
+                    <!-- Abas de Consulta -->
                     <div class="flex items-center space-x-1 min-w-0" id="query-tabs-container">
-                        <!-- Gerado via JS -->
+                        <!-- Gerado dinamicamente -->
                     </div>
 
+                    <!-- Botão Nova Aba -->
+                    <button onclick="createNewTab()" class="px-2.5 py-1 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded transition border border-slate-700 mr-2" title="Abrir Nova Aba de Consulta">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+
                     <!-- Botões de Ação do Editor -->
-                    <div class="flex items-center space-x-2 pb-1.5 ml-3 shrink-0">
-                        <button onclick="clearEditor()" class="px-2.5 py-1 text-xs text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded transition border border-gray-600" title="Limpar código da aba ativa">
-                            <i class="fa-solid fa-eraser"></i> Limpar
+                    <div class="flex items-center space-x-2 pb-1 ml-auto shrink-0">
+                        <button onclick="formatSQLCode()" class="px-2.5 py-1 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-md transition border border-slate-700 flex items-center gap-1" title="Formatar e Identar Código SQL">
+                            <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> Formatar
                         </button>
-                        <button onclick="executeSQL()" class="px-3.5 py-1 text-xs bg-teal-600 hover:bg-teal-500 text-white font-bold rounded shadow transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-play"></i> Executar (Ctrl+Enter)
+                        <button onclick="clearEditor()" class="px-2.5 py-1 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-md transition border border-slate-700 flex items-center gap-1" title="Limpar editor da aba ativa">
+                            <i class="fa-solid fa-eraser text-slate-400"></i> Limpar
+                        </button>
+                        <button onclick="executeSQL()" class="px-4 py-1 text-xs bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold rounded-md shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-play"></i> Executar <span class="text-[10px] font-normal opacity-80">(Ctrl+Enter)</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Campo de Texto do Editor -->
-                <div class="flex-1 relative">
-                    <textarea id="sql-editor" oninput="onEditorInputChange()" spellcheck="false" class="w-full h-full bg-gray-950 text-emerald-400 p-4 code-font text-sm resize-none focus:outline-none focus:ring-1 focus:ring-teal-500/50" placeholder="-- Digite seus comandos SQL aqui (ex: create database aula; use aula;)"></textarea>
+                <div class="bg-slate-900/90 px-3 py-1 border-b border-slate-800 flex items-center gap-1.5 overflow-x-auto text-[11px] shrink-0">
+                    <span class="text-slate-500 font-semibold uppercase text-[10px] mr-1 shrink-0">Atalhos:</span>
+                    <button onclick="insertSnippet('SELECT * FROM ')" class="bg-slate-800 hover:bg-slate-700 text-teal-300 px-2 py-0.5 rounded border border-slate-700 font-mono">SELECT</button>
+                    <button onclick="insertSnippet('INSERT INTO ')" class="bg-slate-800 hover:bg-slate-700 text-emerald-300 px-2 py-0.5 rounded border border-slate-700 font-mono">INSERT</button>
+                    <button onclick="insertSnippet('UPDATE ')" class="bg-slate-800 hover:bg-slate-700 text-amber-300 px-2 py-0.5 rounded border border-slate-700 font-mono">UPDATE</button>
+                    <button onclick="insertSnippet('DELETE FROM ')" class="bg-slate-800 hover:bg-slate-700 text-red-300 px-2 py-0.5 rounded border border-slate-700 font-mono">DELETE</button>
+                    <button onclick="insertSnippet('CREATE TABLE ')" class="bg-slate-800 hover:bg-slate-700 text-purple-300 px-2 py-0.5 rounded border border-slate-700 font-mono">CREATE TABLE</button>
+                    <button onclick="insertSnippet(' WHERE ')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono">WHERE</button>
+                    <button onclick="insertSnippet(' INNER JOIN ')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono">JOIN</button>
+                    <button onclick="insertSnippet(' GROUP BY ')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono">GROUP BY</button>
+                    <button onclick="insertSnippet(' ORDER BY ')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono">ORDER BY</button>
+                </div>
+
+                <div class="flex-1 flex overflow-hidden relative bg-slate-950">
+                    <div id="editor-line-numbers" class="w-10 bg-slate-900/80 py-3 px-1 code-font text-xs border-r border-slate-800 editor-line-numbers overflow-hidden shrink-0 select-none">
+                        1
+                    </div>
+                    <textarea id="sql-editor" oninput="onEditorInputChange()" onscroll="syncEditorScroll()" spellcheck="false" class="flex-1 h-full bg-slate-950 text-emerald-400 p-3 code-font text-xs md:text-sm resize-none focus:outline-none focus:ring-0 leading-relaxed" placeholder="-- Digite seus comandos SQL aqui (ex: CREATE DATABASE escola; USE escola;)"></textarea>
                 </div>
             </div>
 
-            <!-- Seção de Resultados da Execução -->
-            <div class="h-1/2 flex flex-col bg-gray-950 min-h-0">
-                <!-- Cabeçalho de Status -->
-                <div class="bg-gray-800/80 px-4 py-2 border-b border-gray-700/60 flex items-center justify-between text-xs">
-                    <div class="flex items-center space-x-2">
-                        <span class="font-semibold text-gray-300">Resultado da Execução</span>
-                        <span id="execution-time" class="text-gray-500"></span>
+            <div class="h-1/2 flex flex-col bg-slate-950 min-h-0 relative">
+                <!-- Cabeçalho de Status dos Resultados -->
+                <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs shrink-0">
+                    <div class="flex items-center space-x-3">
+                        <span class="font-semibold text-slate-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-table-list text-teal-400"></i> Resultado da Execução
+                        </span>
+                        <span id="execution-time" class="text-slate-500 font-mono text-[11px]"></span>
                     </div>
-                    <div id="status-indicator" class="text-gray-400 text-xs">Pronto</div>
+
+                    <div class="flex items-center gap-2">
+                        <button id="export-csv-btn" onclick="exportResultCSV()" class="hidden px-2 py-0.5 text-[11px] bg-slate-800 hover:bg-slate-700 text-teal-300 rounded border border-slate-700 transition" title="Exportar tabela como CSV">
+                            <i class="fa-solid fa-file-csv"></i> Salvar CSV
+                        </button>
+                        <div id="status-indicator" class="text-slate-400 text-xs flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-slate-500"></span> Pronto
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Conteúdo do Resultado -->
                 <div id="result-container" class="flex-1 overflow-auto p-4">
-                    <div class="text-gray-500 text-sm italic flex flex-col items-center justify-center h-full space-y-2">
-                        <i class="fa-solid fa-code text-3xl opacity-30"></i>
+                    <div class="text-slate-500 text-sm italic flex flex-col items-center justify-center h-full space-y-2 select-none">
+                        <i class="fa-solid fa-terminal text-4xl opacity-30"></i>
                         <p>Execute um comando SQL acima para visualizar os resultados.</p>
                     </div>
                 </div>
@@ -249,38 +265,62 @@
         </main>
     </div>
 
-    <!-- Modal Modal/Janela com Código CREATE TABLE -->
-    <div id="create-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-2xl w-full max-w-xl flex flex-col overflow-hidden animate-fade-in">
-            <!-- Cabeçalho do Modal -->
-            <div class="px-5 py-3.5 bg-gray-800/90 border-b border-gray-700 flex items-center justify-between">
+    
+    <!-- Modal 1: Diagrama ER Relacional -->
+    <div id="er-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden animate-fade-in">
+            <div class="px-5 py-3.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-diagram-project text-teal-400 text-lg"></i>
+                    <div>
+                        <h3 class="font-bold text-sm text-white">Diagrama de Entidade-Relacionamento (ER)</h3>
+                        <p class="text-[11px] text-slate-400">Visualização gráfica das tabelas e esquemas do banco ativo</p>
+                    </div>
+                </div>
+                <button onclick="closeERModal()" class="text-slate-400 hover:text-white transition p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div id="er-diagram-container" class="flex-1 p-6 overflow-auto bg-slate-950 relative flex flex-wrap gap-6 items-start justify-center">
+                <!-- Renderizado via JS -->
+            </div>
+            <div class="px-5 py-3 bg-slate-900 border-t border-slate-800 flex items-center justify-end">
+                <button onclick="closeERModal()" class="px-4 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-lg border border-slate-700 transition">
+                    Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Visualizador DDL CREATE TABLE -->
+    <div id="create-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl w-full max-w-xl flex flex-col overflow-hidden animate-fade-in">
+            <div class="px-5 py-3.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
                 <div class="flex items-center space-x-2">
                     <i class="fa-solid fa-code text-teal-400 text-sm"></i>
                     <h3 id="modal-table-title" class="font-bold text-sm text-white">Estrutura CREATE TABLE</h3>
                 </div>
-                <button onclick="closeCreateModal()" class="text-gray-400 hover:text-white transition p-1">
+                <button onclick="closeCreateModal()" class="text-slate-400 hover:text-white transition p-1">
                     <i class="fa-solid fa-xmark text-base"></i>
                 </button>
             </div>
             
-            <!-- Corpo do Modal -->
             <div class="p-5 space-y-3">
-                <p class="text-xs text-gray-400">Abaixo está o comando DDL SQL utilizado para criar a tabela selecionada:</p>
-                <div class="relative bg-gray-950 p-4 rounded border border-gray-800 overflow-x-auto">
+                <p class="text-xs text-slate-400">Comando DDL SQL correspondente a esta tabela:</p>
+                <div class="relative bg-slate-950 p-4 rounded-lg border border-slate-800 overflow-x-auto">
                     <pre id="modal-code-content" class="code-font text-xs text-emerald-400 whitespace-pre"></pre>
                 </div>
             </div>
 
-            <!-- Rodapé do Modal -->
-            <div class="px-5 py-3 bg-gray-800/90 border-t border-gray-700 flex items-center justify-between">
-                <button onclick="copyModalCode()" id="copy-btn" class="px-3.5 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-teal-300 font-semibold rounded border border-gray-600 transition flex items-center gap-1.5">
+            <div class="px-5 py-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between">
+                <button onclick="copyModalCode()" id="copy-btn" class="px-3.5 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-teal-300 font-semibold rounded-lg border border-slate-700 transition flex items-center gap-1.5">
                     <i class="fa-regular fa-copy"></i> <span id="copy-btn-text">Copiar Código</span>
                 </button>
                 <div class="flex items-center space-x-2">
-                    <button onclick="sendCodeToEditor()" class="px-3.5 py-1.5 text-xs bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded shadow transition flex items-center gap-1.5">
-                        <i class="fa-solid fa-arrow-right-to-bracket"></i> Enviar p/ Editor
+                    <button onclick="sendCodeToEditor()" class="px-3.5 py-1.5 text-xs bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-lg shadow transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrow-right-to-bracket"></i> Enviar ao Editor
                     </button>
-                    <button onclick="closeCreateModal()" class="px-3.5 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded border border-gray-600 transition">
+                    <button onclick="closeCreateModal()" class="px-3.5 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition">
                         Fechar
                     </button>
                 </div>
@@ -288,11 +328,25 @@
         </div>
     </div>
 
-    <!-- Lógica em JavaScript -->
+    <!-- Modal 3: Confirmação e Toasts -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl w-full max-w-md p-5 space-y-4 animate-fade-in">
+            <div class="flex items-center space-x-3 text-amber-400">
+                <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+                <h3 class="font-bold text-base text-white" id="confirm-title">Confirmar Ação</h3>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed" id="confirm-message">Você tem certeza que deseja realizar esta ação?</p>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeConfirmModal(false)" class="px-4 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition">Cancelar</button>
+                <button id="confirm-action-btn" onclick="closeConfirmModal(true)" class="px-4 py-1.5 text-xs bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition shadow">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // ==========================================
-        //  SIMULAÇÃO DO MOTOR BANCO DE DADOS
-        // ==========================================
+        // =========================================================
+        //  MARIADB IN-MEMORY SIMULATION ENGINE
+        // =========================================================
         
         class MariaDBEngine {
             constructor() {
@@ -304,11 +358,11 @@
                     databases: this.databases,
                     currentDB: this.currentDB
                 };
-                localStorage.setItem('mariadb_sim_data', JSON.stringify(data));
+                localStorage.setItem('mariadb_sim_data_v3', JSON.stringify(data));
             }
 
             loadFromStorage() {
-                const data = localStorage.getItem('mariadb_sim_data');
+                const data = localStorage.getItem('mariadb_sim_data_v3');
                 if (data) {
                     try {
                         const parsed = JSON.parse(data);
@@ -337,13 +391,14 @@
                                 checkConstraints: ['quantidade >= 0', 'preco >= 0'],
                                 data: [
                                     { id_produto: 1, nome_produto: 'Mouse Gamer', quantidade: 50, fabricante: 'Logitech', preco: 150.00 },
-                                    { id_produto: 2, nome_produto: 'Teclado Mecânico', quantidade: 20, fabricante: 'Redragon', preco: 320.50 }
+                                    { id_produto: 2, nome_produto: 'Teclado Mecânico', quantidade: 20, fabricante: 'Redragon', preco: 320.50 },
+                                    { id_produto: 3, nome_produto: 'Monitor 27', quantidade: 15, fabricante: 'Dell', preco: 1250.00 }
                                 ]
                             },
                             'alunos': {
                                 columns: [
                                     { name: 'id', type: 'INT', pk: true, autoIncrement: true, notNull: true },
-                                    { name: 'nome', type: 'VARCHAR(100)', pk: false, autoIncrement: false, notNull: false },
+                                    { name: 'nome', type: 'VARCHAR(100)', pk: false, autoIncrement: false, notNull: true },
                                     { name: 'idade', type: 'INT', pk: false, autoIncrement: false, notNull: false },
                                     { name: 'curso', type: 'VARCHAR(50)', pk: false, autoIncrement: false, notNull: false }
                                 ],
@@ -362,18 +417,16 @@
             }
 
             reset() {
-                localStorage.removeItem('mariadb_sim_data');
+                localStorage.removeItem('mariadb_sim_data_v3');
                 this.initDefaults();
             }
 
-            // Utilitário para busca de chaves Case-Insensitive em Objetos
             getCaseInsensitiveKey(obj, searchKey) {
                 if (!obj || !searchKey) return null;
                 const keys = Object.keys(obj);
                 return keys.find(k => k.toLowerCase() === searchKey.toLowerCase()) || null;
             }
 
-            // Utilitário para dividir declarações respeitando parênteses internos ex: DECIMAL(10,2) e CHECK(...)
             splitByComma(str) {
                 const result = [];
                 let current = '';
@@ -409,7 +462,6 @@
                 return result;
             }
 
-            // Utilitário para extrair tuplas de valores no VALUES (ex: ('a', 1), ('b', 2))
             parseValueTuples(str) {
                 const tuples = [];
                 let current = '';
@@ -443,7 +495,6 @@
                 return tuples;
             }
 
-            // Avaliador de Restrições CHECK
             evaluateCheckExpression(row, table, checkExpr) {
                 let expr = checkExpr.trim();
                 if (expr.startsWith('(') && expr.endsWith(')')) {
@@ -493,7 +544,6 @@
                 }
             }
 
-            // Gera o comando CREATE TABLE DDL para a tabela
             generateCreateTableSQL(dbName, tableName) {
                 const dbKey = this.getCaseInsensitiveKey(this.databases, dbName);
                 if (!dbKey) return null;
@@ -524,12 +574,10 @@
                 return sql;
             }
 
-            // Processador de Consultas do Motor
             execute(query) {
                 const cleanQuery = query.trim().replace(/--.*$/gm, ''); // Remove comentários de linha única
                 if (!cleanQuery) return [{ type: 'info', message: 'Nenhum comando executável encontrado.' }];
 
-                // Separa comandos por ponto e vírgula
                 const statements = cleanQuery.split(';')
                     .map(s => s.trim())
                     .filter(s => s.length > 0);
@@ -541,7 +589,7 @@
                         results.push(res);
                     } catch (err) {
                         results.push({ type: 'error', message: err.message, statement: stmt });
-                        break; // Interrompe no primeiro erro como no SQL real
+                        break;
                     }
                 }
                 this.saveToStorage();
@@ -557,6 +605,9 @@
                 switch (command) {
                     case 'SHOW':
                         return this.handleShow(sql);
+                    case 'DESC':
+                    case 'DESCRIBE':
+                        return this.handleDescribe(sql);
                     case 'CREATE':
                         return this.handleCreate(sql);
                     case 'USE':
@@ -574,7 +625,7 @@
                     case 'ALTER':
                         return this.handleAlter(sql);
                     default:
-                        throw new Error(`Sintaxe SQL não suportada ou comando desconhecido '${command}'.`);
+                        throw new Error(`Comando ou sintaxe não suportada: '${command}'.`);
                 }
             }
 
@@ -610,6 +661,28 @@
                 }
             }
 
+            handleDescribe(sql) {
+                const match = sql.match(/(?:DESC|DESCRIBE)\s+`?(\w+)`?/i);
+                if (!match) throw new Error("Sintaxe DESCRIBE incorreta.");
+                if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
+
+                const tableName = match[1];
+                const db = this.databases[this.currentDB];
+                const tableKey = this.getCaseInsensitiveKey(db.tables, tableName);
+                if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
+
+                const table = db.tables[tableKey];
+                const rows = table.columns.map(c => ({
+                    Field: c.name,
+                    Type: c.type,
+                    Null: c.notNull ? 'NO' : 'YES',
+                    Key: c.pk ? 'PRI' : '',
+                    Extra: c.autoIncrement ? 'auto_increment' : ''
+                }));
+
+                return { type: 'select', columns: ['Field', 'Type', 'Null', 'Key', 'Extra'], data: rows, affectedRows: rows.length };
+            }
+
             handleUse(sql) {
                 const match = sql.match(/USE\s+`?(\w+)`?/i);
                 if (!match) throw new Error("Sintaxe USE incorreta. Exemplo: USE nome_banco;");
@@ -633,6 +706,7 @@
                         throw new Error(`Impossível criar o banco '${dbName}'; ele já existe.`);
                     }
                     this.databases[dbName] = { tables: {} };
+                    if (!this.currentDB) this.currentDB = dbName;
                     return { type: 'success', message: `Database '${dbName}' criado com sucesso.` };
                 }
 
@@ -642,58 +716,59 @@
                     
                     const tableName = tableMatch[1];
                     const body = tableMatch[2];
+                    const db = this.databases[this.currentDB];
 
-                    const tables = this.databases[this.currentDB].tables;
-                    const existingTableKey = this.getCaseInsensitiveKey(tables, tableName);
-
-                    if (existingTableKey) {
+                    if (this.getCaseInsensitiveKey(db.tables, tableName)) {
                         throw new Error(`Tabela '${tableName}' já existe.`);
                     }
 
-                    // Processamento de colunas utilizando splitByComma (suporta DECIMAL(10,2) e CHECK)
-                    const colDefs = this.splitByComma(body);
+                    const definitions = this.splitByComma(body);
                     const columns = [];
                     const checkConstraints = [];
 
-                    for (let colDef of colDefs) {
-                        const upperDef = colDef.toUpperCase();
+                    for (let def of definitions) {
+                        def = def.trim();
+                        if (def.toUpperCase().startsWith('CHECK')) {
+                            const chkMatch = def.match(/CHECK\s*\((.+)\)/i);
+                            if (chkMatch) checkConstraints.push(chkMatch[1].trim());
+                            continue;
+                        }
 
-                        if (upperDef.startsWith('CHECK')) {
-                            const checkMatch = colDef.match(/CHECK\s*\((.+)\)/i);
-                            if (checkMatch) {
-                                checkConstraints.push(checkMatch[1].trim());
+                        if (def.toUpperCase().startsWith('PRIMARY KEY')) {
+                            const pkMatch = def.match(/PRIMARY\s+KEY\s*\(`?(\w+)`?\)/i);
+                            if (pkMatch) {
+                                const pkColName = pkMatch[1];
+                                const targetCol = columns.find(c => c.name.toLowerCase() === pkColName.toLowerCase());
+                                if (targetCol) {
+                                    targetCol.pk = true;
+                                    targetCol.notNull = true;
+                                }
                             }
                             continue;
                         }
 
-                        if (upperDef.startsWith('PRIMARY KEY')) {
-                            continue;
+                        // Definição de Coluna Padrão
+                        const parts = def.split(/\s+/);
+                        if (parts.length >= 2) {
+                            const colName = parts[0].replace(/`/g, '');
+                            const colType = parts[1].toUpperCase();
+                            const upperDef = def.toUpperCase();
+
+                            const isPk = upperDef.includes('PRIMARY KEY');
+                            const isAutoInc = upperDef.includes('AUTO_INCREMENT');
+                            const isNotNull = upperDef.includes('NOT NULL') || isPk;
+
+                            columns.push({
+                                name: colName,
+                                type: colType,
+                                pk: isPk,
+                                autoIncrement: isAutoInc,
+                                notNull: isNotNull
+                            });
                         }
-
-                        let cleanDef = colDef;
-                        const inlineCheckMatch = colDef.match(/CHECK\s*\((.+)\)/i);
-                        if (inlineCheckMatch) {
-                            checkConstraints.push(inlineCheckMatch[1].trim());
-                            cleanDef = colDef.replace(/CHECK\s*\((.+)\)/i, '').trim();
-                        }
-
-                        const parts = cleanDef.split(/\s+/);
-                        const cName = parts[0].replace(/`/g, '');
-                        const cType = parts[1] ? parts[1].toUpperCase() : 'VARCHAR(255)';
-                        const isPk = upperDef.includes('PRIMARY KEY');
-                        const isAuto = upperDef.includes('AUTO_INCREMENT');
-                        const isNotNull = upperDef.includes('NOT NULL');
-
-                        columns.push({
-                            name: cName,
-                            type: cType,
-                            pk: isPk,
-                            autoIncrement: isAuto,
-                            notNull: isNotNull
-                        });
                     }
 
-                    tables[tableName] = {
+                    db.tables[tableName] = {
                         columns: columns,
                         checkConstraints: checkConstraints,
                         data: []
@@ -702,676 +777,829 @@
                     return { type: 'success', message: `Tabela '${tableName}' criada com sucesso.` };
                 }
 
-                throw new Error("Sintaxe incorreta para comando CREATE.");
+                throw new Error("Sintaxe CREATE inválida.");
             }
 
             handleInsert(sql) {
                 if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
 
-                const regex = /INSERT\s+INTO\s+`?(\w+)`?\s*(?:\(([^)]+)\))?\s*VALUES\s+([\s\S]+)/i;
-                const match = sql.match(regex);
-
-                if (!match) throw new Error("Sintaxe de INSERT incorreta. Exemplo: INSERT INTO tabela (col1) VALUES ('val1'), ('val2');");
+                const match = sql.match(/INSERT\s+INTO\s+`?(\w+)`?\s*(?:\(([^)]+)\))?\s*VALUES\s*(.+)/i);
+                if (!match) throw new Error("Sintaxe INSERT incorreta.");
 
                 const tableName = match[1];
-                const colsRaw = match[2];
-                const valsRaw = match[3];
+                const specifiedColsStr = match[2];
+                const valuesStr = match[3];
 
-                const tables = this.databases[this.currentDB].tables;
-                const tableKey = this.getCaseInsensitiveKey(tables, tableName);
+                const db = this.databases[this.currentDB];
+                const tableKey = this.getCaseInsensitiveKey(db.tables, tableName);
                 if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
 
-                const table = tables[tableKey];
+                const table = db.tables[tableKey];
+                const valueTuples = this.parseValueTuples(valuesStr);
 
-                let columnsToInsert = colsRaw 
-                    ? colsRaw.split(',').map(c => c.trim().replace(/`/g, ''))
-                    : table.columns.map(c => c.name);
+                if (valueTuples.length === 0) throw new Error("Nenhum valor fornecido para inserção.");
 
-                const tupleStrings = this.parseValueTuples(valsRaw);
-                if (tupleStrings.length === 0) {
-                    throw new Error("Nenhum conjunto de valores especificado no comando INSERT.");
+                let insertedCount = 0;
+
+                let targetColumns = [];
+                if (specifiedColsStr) {
+                    targetColumns = specifiedColsStr.split(',').map(c => c.trim().replace(/`/g, ''));
+                } else {
+                    targetColumns = table.columns.map(c => c.name);
                 }
 
-                let insertedRows = [];
+                for (let tuple of valueTuples) {
+                    const rawValues = this.splitByComma(tuple);
+                    const newRow = {};
 
-                for (let tupleStr of tupleStrings) {
-                    let valuesToInsert = this.splitByComma(tupleStr).map(v => {
-                        v = v.trim();
-                        if ((v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) {
-                            return v.slice(1, -1);
-                        }
-                        if (!isNaN(v) && v !== '') return Number(v);
-                        if (v.toUpperCase() === 'NULL') return null;
-                        return v;
-                    });
+                    // Preenche valores com nulo
+                    table.columns.forEach(col => newRow[col.name] = null);
 
-                    if (columnsToInsert.length !== valuesToInsert.length) {
-                        throw new Error(`A contagem de colunas (${columnsToInsert.length}) não corresponde à contagem de valores (${valuesToInsert.length}) em um dos registros.`);
-                    }
+                    targetColumns.forEach((colInput, idx) => {
+                        const actualCol = table.columns.find(c => c.name.toLowerCase() === colInput.toLowerCase());
+                        if (!actualCol) throw new Error(`Coluna '${colInput}' não existe na tabela '${tableKey}'.`);
 
-                    let newRow = {};
-
-                    // 1. Inicialização de todas as colunas
-                    table.columns.forEach(col => {
-                        newRow[col.name] = null;
-                    });
-
-                    // 2. Preenchimento das colunas do INSERT
-                    columnsToInsert.forEach((colNameInput, idx) => {
-                        const actualCol = table.columns.find(c => c.name.toLowerCase() === colNameInput.toLowerCase());
-                        if (!actualCol) throw new Error(`Coluna desconhecida '${colNameInput}' na tabela '${tableName}'`);
-                        newRow[actualCol.name] = valuesToInsert[idx];
-                    });
-
-                    // 3. Processamento de AUTO_INCREMENT sequencial
-                    table.columns.forEach(col => {
-                        if (col.autoIncrement) {
-                            const currentValue = newRow[col.name];
-                            if (currentValue === null || currentValue === undefined || currentValue === 0) {
-                                const allRows = [...table.data, ...insertedRows];
-                                const maxId = allRows.reduce((max, r) => {
-                                    const val = Number(r[col.name]);
-                                    return !isNaN(val) && val > max ? val : max;
-                                }, 0);
-                                newRow[col.name] = maxId + 1;
+                        let val = rawValues[idx];
+                        if (val !== undefined) {
+                            val = val.trim();
+                            if (val.toUpperCase() === 'NULL') {
+                                val = null;
+                            } else if ((val.startsWith("'") && val.endsWith("'")) || (val.startsWith('"') && val.endsWith('"'))) {
+                                val = val.slice(1, -1);
+                            } else if (!isNaN(val) && val !== '') {
+                                val = Number(val);
                             }
+                            newRow[actualCol.name] = val;
                         }
                     });
 
-                    // 4. Validação de NOT NULL
+                    // Trata Auto Increment & Chave Primária
                     table.columns.forEach(col => {
-                        if (col.notNull && !col.autoIncrement) {
-                            if (newRow[col.name] === null || newRow[col.name] === undefined) {
-                                throw new Error(`A coluna '${col.name}' não pode ser nula (NOT NULL).`);
-                            }
+                        if (col.autoIncrement && (newRow[col.name] === null || newRow[col.name] === undefined)) {
+                            const maxVal = table.data.reduce((max, r) => (r[col.name] > max ? r[col.name] : max), 0);
+                            newRow[col.name] = maxVal + 1;
                         }
                     });
 
-                    // 5. Validação de Restrições CHECK
-                    if (table.checkConstraints && table.checkConstraints.length > 0) {
-                        for (let checkExpr of table.checkConstraints) {
-                            if (!this.evaluateCheckExpression(newRow, table, checkExpr)) {
-                                throw new Error(`Restrição CHECK (${checkExpr}) falhou ao inserir o registro.`);
-                            }
+                    // Valida Not Null
+                    table.columns.forEach(col => {
+                        if (col.notNull && newRow[col.name] === null) {
+                            throw new Error(`A coluna '${col.name}' não pode conter valores NULOS.`);
+                        }
+                    });
+
+                    // Valida Chave Primária Única
+                    const pkCol = table.columns.find(c => c.pk);
+                    if (pkCol) {
+                        const pkVal = newRow[pkCol.name];
+                        const duplicate = table.data.some(r => r[pkCol.name] == pkVal);
+                        if (duplicate) {
+                            throw new Error(`Violação de Chave Primária: O valor '${pkVal}' já existe em '${pkCol.name}'.`);
                         }
                     }
 
-                    insertedRows.push(newRow);
+                    // Valida Restrições CHECK
+                    if (table.checkConstraints) {
+                        for (let chk of table.checkConstraints) {
+                            if (!this.evaluateCheckExpression(newRow, table, chk)) {
+                                throw new Error(`Violação da restrição CHECK (${chk}) para a linha inserida.`);
+                            }
+                        }
+                    }
+
+                    table.data.push(newRow);
+                    insertedCount++;
                 }
 
-                table.data.push(...insertedRows);
-                return { type: 'success', message: `${insertedRows.length} linha(s) inserida(s) com sucesso em '${tableKey}'.` };
+                return { type: 'success', message: `Query OK, ${insertedCount} linha(s) afetada(s).`, affectedRows: insertedCount };
             }
 
             handleSelect(sql) {
                 if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
 
-                const regex = /SELECT\s+(.+)\s+FROM\s+`?(\w+)`?(?:\s+WHERE\s+(.+))?/i;
-                const match = sql.match(regex);
+                const match = sql.match(/SELECT\s+(.+?)\s+FROM\s+`?(\w+)`?(?:\s+AS\s+`?(\w+)`?)?(?:\s+(LEFT|INNER)?\s*JOIN\s+`?(\w+)`?\s+ON\s+(.+?))?(?:\s+WHERE\s+(.+?))?(?:\s+GROUP\s+BY\s+(.+?))?(?:\s+ORDER\s+BY\s+(.+?))?(?:\s+LIMIT\s+(\d+))?$/i);
+                if (!match) throw new Error("Sintaxe SELECT não suportada ou mal formatada.");
 
-                if (!match) throw new Error("Sintaxe SELECT incorreta. Exemplo: SELECT * FROM tabela WHERE col = 'val';");
+                const selectColsRaw = match[1];
+                const mainTableInput = match[2];
+                const joinType = match[4] ? match[4].toUpperCase() : 'INNER';
+                const joinTableInput = match[5];
+                const joinOnCondition = match[6];
+                const whereClause = match[7];
+                const groupByClause = match[8];
+                const orderByClause = match[9];
+                const limitClause = match[10];
 
-                const colsClause = match[1].trim();
-                const tableName = match[2].trim();
-                const whereClause = match[3] ? match[3].trim() : null;
+                const db = this.databases[this.currentDB];
+                const mainTableKey = this.getCaseInsensitiveKey(db.tables, mainTableInput);
+                if (!mainTableKey) throw new Error(`Tabela '${mainTableInput}' não encontrada.`);
 
-                const tables = this.databases[this.currentDB].tables;
-                const tableKey = this.getCaseInsensitiveKey(tables, tableName);
-                if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
+                const mainTable = db.tables[mainTableKey];
+                let dataset = mainTable.data.map(row => ({ ...row }));
 
-                const table = tables[tableKey];
-                let resultData = [...table.data];
+                // Processa JOIN
+                if (joinTableInput && joinOnCondition) {
+                    const joinTableKey = this.getCaseInsensitiveKey(db.tables, joinTableInput);
+                    if (!joinTableKey) throw new Error(`Tabela para JOIN '${joinTableInput}' não existe.`);
 
-                // Filtro WHERE
-                if (whereClause) {
-                    resultData = resultData.filter(row => this.evaluateWhere(row, table, whereClause));
-                }
+                    const joinTable = db.tables[joinTableKey];
+                    const onMatch = joinOnCondition.match(/`?(\w+)`?\.`?(\w+)`?\s*=\s*`?(\w+)`?\.`?(\w+)`?/);
+                    if (!onMatch) throw new Error("Condição JOIN ON suportada apenas na forma t1.col1 = t2.col2.");
 
-                // Seleção de colunas
-                let selectedCols = [];
-                if (colsClause === '*') {
-                    selectedCols = table.columns.map(c => c.name);
-                } else {
-                    const requestedCols = colsClause.split(',').map(c => c.trim().replace(/`/g, ''));
-                    requestedCols.forEach(reqCol => {
-                        const actualCol = table.columns.find(c => c.name.toLowerCase() === reqCol.toLowerCase());
-                        if (actualCol) {
-                            selectedCols.push(actualCol.name);
-                        } else {
-                            selectedCols.push(reqCol); // Mantém caso seja expressão não mapeada
+                    const joinedDataset = [];
+                    dataset.forEach(mainRow => {
+                        let matched = false;
+                        joinTable.data.forEach(joinRow => {
+                            let matchOn = false;
+                            if (onMatch[1].toLowerCase() === mainTableKey.toLowerCase()) {
+                                matchOn = mainRow[onMatch[2]] == joinRow[onMatch[4]];
+                            } else {
+                                matchOn = mainRow[onMatch[4]] == joinRow[onMatch[2]];
+                            }
+
+                            if (matchOn) {
+                                matched = true;
+                                joinedDataset.push({ ...mainRow, ...joinRow });
+                            }
+                        });
+                        if (!matched && joinType === 'LEFT') {
+                            const emptyJoinRow = {};
+                            joinTable.columns.forEach(c => emptyJoinRow[c.name] = null);
+                            joinedDataset.push({ ...mainRow, ...emptyJoinRow });
                         }
                     });
+                    dataset = joinedDataset;
                 }
 
-                // Projeção dos dados
-                const finalRows = resultData.map(row => {
-                    let newRow = {};
-                    selectedCols.forEach(col => {
-                        newRow[col] = row[col] !== undefined ? row[col] : null;
+                // Processa WHERE
+                if (whereClause) {
+                    dataset = dataset.filter(row => this.evaluateCheckExpression(row, mainTable, whereClause));
+                }
+
+                // Processa GROUP BY & Agregações simples
+                if (groupByClause) {
+                    const groupCol = groupByClause.trim();
+                    const groups = {};
+                    dataset.forEach(row => {
+                        const key = row[groupCol] || 'NULL';
+                        if (!groups[key]) groups[key] = [];
+                        groups[key].push(row);
                     });
-                    return newRow;
-                });
+
+                    const aggregatedData = [];
+                    Object.keys(groups).forEach(key => {
+                        const groupRows = groups[key];
+                        const summaryRow = { [groupCol]: groupRows[0][groupCol] };
+
+                        if (selectColsRaw.toUpperCase().includes('COUNT(')) {
+                            summaryRow['COUNT(*)'] = groupRows.length;
+                        }
+                        if (selectColsRaw.toUpperCase().includes('SUM(')) {
+                            const sumMatch = selectColsRaw.match(/SUM\(`?(\w+)`?\)/i);
+                            if (sumMatch) {
+                                const sumCol = sumMatch[1];
+                                summaryRow[`SUM(${sumCol})`] = groupRows.reduce((acc, r) => acc + (Number(r[sumCol]) || 0), 0);
+                            }
+                        }
+                        aggregatedData.push(summaryRow);
+                    });
+                    dataset = aggregatedData;
+                }
+
+                if (orderByClause) {
+                    const parts = orderByClause.trim().split(/\s+/);
+                    const orderCol = parts[0];
+                    const direction = parts[1] && parts[1].toUpperCase() === 'DESC' ? -1 : 1;
+
+                    dataset.sort((a, b) => {
+                        if (a[orderCol] < b[orderCol]) return -1 * direction;
+                        if (a[orderCol] > b[orderCol]) return 1 * direction;
+                        return 0;
+                    });
+                }
+
+                if (limitClause) {
+                    dataset = dataset.slice(0, parseInt(limitClause, 10));
+                }
+
+                let finalColumns = [];
+                if (selectColsRaw.trim() === '*') {
+                    finalColumns = dataset.length > 0 ? Object.keys(dataset[0]) : mainTable.columns.map(c => c.name);
+                } else {
+                    finalColumns = selectColsRaw.split(',').map(c => c.trim().replace(/`/g, ''));
+                }
 
                 return {
                     type: 'select',
-                    columns: selectedCols,
-                    data: finalRows,
-                    affectedRows: finalRows.length
+                    columns: finalColumns,
+                    data: dataset,
+                    affectedRows: dataset.length
                 };
             }
 
             handleUpdate(sql) {
                 if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
-
-                const regex = /UPDATE\s+`?(\w+)`?\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$/i;
-                const match = sql.match(regex);
-
-                if (!match) throw new Error("Sintaxe UPDATE incorreta. Exemplo: UPDATE tabela SET col = 'val' WHERE id = 1;");
+                const match = sql.match(/UPDATE\s+`?(\w+)`?\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$/i);
+                if (!match) throw new Error("Sintaxe UPDATE incorreta.");
 
                 const tableName = match[1];
                 const setClause = match[2];
-                const whereClause = match[3] ? match[3].trim() : null;
+                const whereClause = match[3];
 
-                const tables = this.databases[this.currentDB].tables;
-                const tableKey = this.getCaseInsensitiveKey(tables, tableName);
+                const db = this.databases[this.currentDB];
+                const tableKey = this.getCaseInsensitiveKey(db.tables, tableName);
                 if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
 
-                const table = tables[tableKey];
-
-                const assignments = setClause.split(',').map(assign => {
-                    const eqIndex = assign.indexOf('=');
-                    if (eqIndex === -1) throw new Error(`Atribuição SET inválida: '${assign}'`);
-
-                    const col = assign.substring(0, eqIndex).trim().replace(/`/g, '');
-                    let val = assign.substring(eqIndex + 1).trim();
-
-                    if ((val.startsWith("'") && val.endsWith("'")) || (val.startsWith('"') && val.endsWith('"'))) {
-                        val = val.slice(1, -1);
-                    } else if (!isNaN(val) && val !== '') {
-                        val = Number(val);
-                    } else if (val.toUpperCase() === 'NULL') {
-                        val = null;
-                    }
-
-                    const actualCol = table.columns.find(c => c.name.toLowerCase() === col.toLowerCase());
-                    if (!actualCol) throw new Error(`Coluna desconhecida '${col}' no comando UPDATE.`);
-
-                    return { colName: actualCol.name, val: val };
-                });
-
+                const table = db.tables[tableKey];
+                const setAssignments = this.splitByComma(setClause);
                 let updatedCount = 0;
 
                 table.data.forEach(row => {
-                    if (!whereClause || this.evaluateWhere(row, table, whereClause)) {
-                        const tempRow = { ...row };
-                        assignments.forEach(a => {
-                            tempRow[a.colName] = a.val;
-                        });
-
-                        // Validação de NOT NULL
-                        table.columns.forEach(col => {
-                            if (col.notNull && (tempRow[col.name] === null || tempRow[col.name] === undefined)) {
-                                throw new Error(`A coluna '${col.name}' não pode ser nula (NOT NULL).`);
-                            }
-                        });
-
-                        // Validação de CHECK
-                        if (table.checkConstraints && table.checkConstraints.length > 0) {
-                            for (let checkExpr of table.checkConstraints) {
-                                if (!this.evaluateCheckExpression(tempRow, table, checkExpr)) {
-                                    throw new Error(`Restrição CHECK (${checkExpr}) falhou na atualização.`);
+                    const shouldUpdate = whereClause ? this.evaluateCheckExpression(row, table, whereClause) : true;
+                    if (shouldUpdate) {
+                        setAssignments.forEach(assign => {
+                            const [colInput, rawVal] = assign.split('=').map(s => s.trim());
+                            const actualCol = table.columns.find(c => c.name.toLowerCase() === colInput.toLowerCase());
+                            if (actualCol) {
+                                let val = rawVal;
+                                if ((val.startsWith("'") && val.endsWith("'")) || (val.startsWith('"') && val.endsWith('"'))) {
+                                    val = val.slice(1, -1);
+                                } else if (!isNaN(val)) {
+                                    val = Number(val);
                                 }
+                                row[actualCol.name] = val;
                             }
-                        }
-
-                        assignments.forEach(a => {
-                            row[a.colName] = a.val;
                         });
                         updatedCount++;
                     }
                 });
 
-                return { type: 'success', message: `UPDATE concluído. ${updatedCount} linha(s) afetada(s).` };
+                return { type: 'success', message: `Query OK, ${updatedCount} linha(s) alterada(s).`, affectedRows: updatedCount };
             }
 
             handleDelete(sql) {
                 if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
-
-                const regex = /DELETE\s+FROM\s+`?(\w+)`?(?:\s+WHERE\s+(.+))?/i;
-                const match = sql.match(regex);
-
-                if (!match) throw new Error("Sintaxe DELETE incorreta. Exemplo: DELETE FROM tabela WHERE id = 1;");
+                const match = sql.match(/DELETE\s+FROM\s+`?(\w+)`?(?:\s+WHERE\s+(.+))?$/i);
+                if (!match) throw new Error("Sintaxe DELETE incorreta.");
 
                 const tableName = match[1];
-                const whereClause = match[2] ? match[2].trim() : null;
+                const whereClause = match[2];
 
-                const tables = this.databases[this.currentDB].tables;
-                const tableKey = this.getCaseInsensitiveKey(tables, tableName);
+                const db = this.databases[this.currentDB];
+                const tableKey = this.getCaseInsensitiveKey(db.tables, tableName);
                 if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
 
-                const table = tables[tableKey];
-                const initialLength = table.data.length;
+                const table = db.tables[tableKey];
+                const initialCount = table.data.length;
 
                 if (!whereClause) {
                     table.data = [];
                 } else {
-                    table.data = table.data.filter(row => !this.evaluateWhere(row, table, whereClause));
+                    table.data = table.data.filter(row => !this.evaluateCheckExpression(row, table, whereClause));
                 }
 
-                const deletedCount = initialLength - table.data.length;
-                return { type: 'success', message: `DELETE concluído. ${deletedCount} linha(s) removida(s).` };
+                const deletedCount = initialCount - table.data.length;
+                return { type: 'success', message: `Query OK, ${deletedCount} linha(s) removida(s).`, affectedRows: deletedCount };
             }
 
             handleDrop(sql) {
-                const dbMatch = sql.match(/DROP\s+DATABASE\s+`?(\w+)`?/i);
+                const dbMatch = sql.match(/DROP\s+DATABASE\s+(?:IF\s+EXISTS\s+)?`?(\w+)`?/i);
                 if (dbMatch) {
-                    const targetName = dbMatch[1];
-                    const existingKey = this.getCaseInsensitiveKey(this.databases, targetName);
-                    if (!existingKey) throw new Error(`Não foi possível apagar '${targetName}'; banco não existe.`);
-                    
-                    delete this.databases[existingKey];
-                    if (this.currentDB && this.currentDB.toLowerCase() === targetName.toLowerCase()) {
-                        this.currentDB = null;
-                    }
-                    return { type: 'success', message: `Banco de dados '${targetName}' excluído.` };
+                    const dbName = dbMatch[1];
+                    const key = this.getCaseInsensitiveKey(this.databases, dbName);
+                    if (!key) throw new Error(`Banco de dados '${dbName}' não existe.`);
+                    delete this.databases[key];
+                    if (this.currentDB === key) this.currentDB = Object.keys(this.databases)[0] || null;
+                    return { type: 'success', message: `Database '${dbName}' removido com sucesso.` };
                 }
 
-                const tableMatch = sql.match(/DROP\s+TABLE\s+`?(\w+)`?/i);
+                const tableMatch = sql.match(/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?`?(\w+)`?/i);
                 if (tableMatch) {
                     if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
-                    const targetName = tableMatch[1];
-                    const tables = this.databases[this.currentDB].tables;
-                    const existingKey = this.getCaseInsensitiveKey(tables, targetName);
-
-                    if (!existingKey) {
-                        throw new Error(`Tabela '${targetName}' não existe.`);
-                    }
-                    delete tables[existingKey];
-                    return { type: 'success', message: `Tabela '${targetName}' excluída.` };
+                    const tableName = tableMatch[1];
+                    const db = this.databases[this.currentDB];
+                    const tableKey = this.getCaseInsensitiveKey(db.tables, tableName);
+                    if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
+                    delete db.tables[tableKey];
+                    return { type: 'success', message: `Tabela '${tableName}' removida com sucesso.` };
                 }
 
-                throw new Error("Sintaxe DROP incorreta. Use DROP DATABASE nome; ou DROP TABLE nome;");
+                throw new Error("Sintaxe DROP inválida.");
             }
 
             handleAlter(sql) {
                 if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
-                const regex = /ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+`?(\w+)`?\s+(.+)/i;
-                const match = sql.match(regex);
+                const addMatch = sql.match(/ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+`?(\w+)`?\s+(\w+)/i);
+                if (addMatch) {
+                    const tableName = addMatch[1];
+                    const colName = addMatch[2];
+                    const colType = addMatch[3].toUpperCase();
 
-                if (!match) throw new Error("Sintaxe ALTER TABLE suportada: ALTER TABLE nome ADD col TIPO;");
+                    const db = this.databases[this.currentDB];
+                    const tableKey = this.getCaseInsensitiveKey(db.tables, tableName);
+                    if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
 
-                const tableName = match[1];
-                const newColName = match[2];
-                const newColType = match[3].replace(';', '').trim().toUpperCase();
+                    const table = db.tables[tableKey];
+                    table.columns.push({ name: colName, type: colType, pk: false, autoIncrement: false, notNull: false });
+                    table.data.forEach(r => r[colName] = null);
 
-                const tables = this.databases[this.currentDB].tables;
-                const tableKey = this.getCaseInsensitiveKey(tables, tableName);
-                if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
-
-                const table = tables[tableKey];
-                
-                // Verifica se coluna já existe
-                if (table.columns.some(c => c.name.toLowerCase() === newColName.toLowerCase())) {
-                    throw new Error(`Coluna '${newColName}' já existe na tabela '${tableKey}'.`);
+                    return { type: 'success', message: `Coluna '${colName}' adicionada à tabela '${tableName}'.` };
                 }
-
-                table.columns.push({ name: newColName, type: newColType, pk: false, autoIncrement: false });
-                table.data.forEach(row => row[newColName] = null);
-
-                return { type: 'success', message: `Coluna '${newColName}' adicionada à tabela '${tableKey}'.` };
-            }
-
-            // Avaliador de expressões WHERE Robusto e Case-Insensitive
-            evaluateWhere(row, table, whereClause) {
-                if (!whereClause) return true;
-
-                // Suporta comparadores =, !=, <>, >, <, >=, <=, LIKE
-                const regex = /`?(\w+)`?\s*(=|!=|<>|>=|<=|>|<|LIKE)\s*(.+)/i;
-                const match = whereClause.match(regex);
-
-                if (!match) return true; // Se a expressão for complexa/não suportada, retorna padrão seguro
-
-                const colInput = match[1];
-                const op = match[2].toUpperCase();
-                let rawVal = match[3].trim();
-
-                // Limpa aspas do valor
-                if ((rawVal.startsWith("'") && rawVal.endsWith("'")) || (rawVal.startsWith('"') && rawVal.endsWith('"'))) {
-                    rawVal = rawVal.slice(1, -1);
-                } else if (!isNaN(rawVal) && rawVal !== '') {
-                    rawVal = Number(rawVal);
-                }
-
-                // Identifica a coluna correta independente de Case
-                const actualCol = table.columns.find(c => c.name.toLowerCase() === colInput.toLowerCase());
-                if (!actualCol) return false;
-
-                const rowVal = row[actualCol.name];
-
-                // Comparações de NULL
-                if (rowVal === null || rowVal === undefined) {
-                    return op === '!=' || op === '<>';
-                }
-
-                // Comparação de Strings Case-Insensitive
-                if (typeof rowVal === 'string' && typeof rawVal === 'string') {
-                    const rowStr = rowVal.toLowerCase();
-                    const targetStr = rawVal.toLowerCase();
-
-                    switch (op) {
-                        case '=': return rowStr === targetStr;
-                        case '!=':
-                        case '<>': return rowStr !== targetStr;
-                        case 'LIKE':
-                            const pattern = targetStr.replace(/%/g, '.*').replace(/_/g, '.');
-                            return new RegExp(`^${pattern}$`, 'i').test(rowStr);
-                        default: return rowStr === targetStr;
-                    }
-                }
-
-                // Comparação Numérica e Genérica
-                switch (op) {
-                    case '=': return rowVal == rawVal;
-                    case '!=':
-                    case '<>': return rowVal != rawVal;
-                    case '>': return rowVal > rawVal;
-                    case '<': return rowVal < rawVal;
-                    case '>=': return rowVal >= rawVal;
-                    case '<=': return rowVal <= rawVal;
-                    case 'LIKE':
-                        return String(rowVal).toLowerCase().includes(String(rawVal).toLowerCase());
-                    default: return rowVal == rawVal;
-                }
+                throw new Error("Sintaxe ALTER TABLE não suportada.");
             }
         }
 
-        // Inicializa o Motor Global
+        // INSTÂNCIA DO MOTOR
         const dbEngine = new MariaDBEngine();
 
-        // ==========================================
-        //  GERENCIADOR DE ABAS DE CONSULTA (HEIDISQL)
-        // ==========================================
-        
-        class TabManager {
-            constructor() {
-                this.tabs = [];
-                this.activeTabId = null;
-                this.nextTabSeq = 1;
-                this.loadFromStorage();
+        let queryTabs = [
+            { id: 1, name: 'Consulta 1', code: 'SELECT * FROM produtos;\nSELECT * FROM alunos;' }
+        ];
+        let activeTabId = 1;
+        let tabCounter = 1;
+
+        let activeLessonIndex = 0;
+        const guidedLessons = [
+            {
+                id: 1,
+                title: "1. Criar e Selecionar Banco",
+                description: "Crie um banco chamado 'empresa' e ative-o para uso.",
+                sql: "CREATE DATABASE empresa;\nUSE empresa;",
+                targetDb: "empresa"
+            },
+            {
+                id: 2,
+                title: "2. Criar Tabela com Chave Primária",
+                description: "Crie a tabela 'funcionarios' com ID e Nome.",
+                sql: "CREATE TABLE funcionarios (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  nome VARCHAR(100) NOT NULL,\n  cargo VARCHAR(50)\n);",
+                targetTable: "funcionarios"
+            },
+            {
+                id: 3,
+                title: "3. Inserir Registros (DML)",
+                description: "Insira funcionários na tabela recém-criada.",
+                sql: "INSERT INTO funcionarios (nome, cargo) VALUES\n('Carlos Mendes', 'Dev SQL'),\n('Beatriz Lima', 'Analista Dados');"
+            },
+            {
+                id: 4,
+                title: "4. Consultar Dados com Filtro",
+                description: "Selecione produtos da tabela 'produtos' com quantidade > 20.",
+                sql: "USE escola;\nSELECT * FROM produtos WHERE quantidade > 20;"
+            },
+            {
+                id: 5,
+                title: "5. Atualizar Registros (UPDATE)",
+                description: "Aumente o preço do 'Teclado Mecânico'.",
+                sql: "UPDATE produtos SET preco = 350.00 WHERE id_produto = 2;\nSELECT * FROM produtos;"
+            },
+            {
+                id: 6,
+                title: "6. Agregação e GROUP BY",
+                description: "Conte o total de alunos agrupados por curso.",
+                sql: "SELECT curso, COUNT(*) FROM alunos GROUP BY curso;"
+            },
+            {
+                id: 7,
+                title: "7. Excluir Registros com WHERE",
+                description: "Remova o produto com id_produto = 1.",
+                sql: "DELETE FROM produtos WHERE id_produto = 1;\nSELECT * FROM produtos;"
             }
+        ];
 
-            loadFromStorage() {
-                const saved = localStorage.getItem('mariadb_sim_tabs');
-                if (saved) {
-                    try {
-                        const parsed = JSON.parse(saved);
-                        this.tabs = parsed.tabs || [];
-                        this.activeTabId = parsed.activeTabId || null;
-                        this.nextTabSeq = parsed.nextTabSeq || 1;
-                    } catch (e) {
-                        this.tabs = [];
-                    }
-                }
-                
-                if (this.tabs.length === 0) {
-                    this.addNewTab('Consulta', '-- Digite seus comandos SQL aqui (ex: create database aula; use aula;)');
-                } else if (!this.tabs.some(t => t.id === this.activeTabId)) {
-                    this.activeTabId = this.tabs[0].id;
-                }
-            }
-
-            saveToStorage() {
-                localStorage.setItem('mariadb_sim_tabs', JSON.stringify({
-                    tabs: this.tabs,
-                    activeTabId: this.activeTabId,
-                    nextTabSeq: this.nextTabSeq
-                }));
-            }
-
-            getActiveTab() {
-                return this.tabs.find(t => t.id === this.activeTabId);
-            }
-
-            addNewTab(title = null, content = '') {
-                const id = 'tab_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-                if (!title) {
-                    title = this.nextTabSeq === 1 ? 'Consulta' : `Consulta #${this.nextTabSeq}`;
-                    this.nextTabSeq++;
-                }
-                const newTab = { id, title, content };
-                this.tabs.push(newTab);
-                this.activeTabId = id;
-                this.saveToStorage();
-                this.renderTabs();
-                this.loadActiveTabContent();
-                return newTab;
-            }
-
-            switchTab(id) {
-                if (this.activeTabId === id) return;
-                this.syncCurrentTabContent();
-                this.activeTabId = id;
-                this.saveToStorage();
-                this.renderTabs();
-                this.loadActiveTabContent();
-            }
-
-            closeTab(id, event) {
-                if (event) event.stopPropagation();
-                
-                const index = this.tabs.findIndex(t => t.id === id);
-                if (index === -1) return;
-
-                this.tabs.splice(index, 1);
-
-                if (this.tabs.length === 0) {
-                    this.addNewTab();
-                } else if (this.activeTabId === id) {
-                    const nextIndex = Math.max(0, index - 1);
-                    this.activeTabId = this.tabs[nextIndex].id;
-                }
-
-                this.saveToStorage();
-                this.renderTabs();
-                this.loadActiveTabContent();
-            }
-
-            syncCurrentTabContent() {
-                const active = this.getActiveTab();
-                if (active) {
-                    const editor = document.getElementById('sql-editor');
-                    if (editor) {
-                        active.content = editor.value;
-                        this.saveToStorage();
-                    }
-                }
-            }
-
-            loadActiveTabContent() {
-                const active = this.getActiveTab();
-                const editor = document.getElementById('sql-editor');
-                if (editor && active) {
-                    editor.value = active.content || '';
-                }
-            }
-
-            renderTabs() {
-                const container = document.getElementById('query-tabs-container');
-                if (!container) return;
-
-                container.innerHTML = '';
-
-                this.tabs.forEach(tab => {
-                    const isActive = tab.id === this.activeTabId;
-                    const hasText = tab.content && tab.content.trim().length > 0;
-                    
-                    const tabBtn = document.createElement('div');
-                    tabBtn.className = `flex items-center gap-2 px-3 py-1.5 text-xs rounded-t border-t border-x cursor-pointer select-none transition ${
-                        isActive 
-                            ? 'bg-gray-950 text-teal-300 border-teal-500/60 font-semibold shadow-sm' 
-                            : 'bg-gray-800/60 text-gray-400 hover:text-gray-200 border-gray-700/80 hover:bg-gray-800'
-                    }`;
-                    
-                    tabBtn.onclick = () => this.switchTab(tab.id);
-
-                    tabBtn.innerHTML = `
-                        <i class="fa-solid fa-play text-[10px] ${isActive ? 'text-teal-400' : 'text-gray-500'}"></i>
-                        <span class="whitespace-nowrap">${tab.title}${hasText ? '*' : ''}</span>
-                        <button onclick="tabManager.closeTab('${tab.id}', event)" class="ml-1 text-gray-500 hover:text-red-400 rounded p-0.5 transition" title="Fechar aba">
-                            <i class="fa-solid fa-xmark text-xs"></i>
-                        </button>
-                    `;
-
-                    container.appendChild(tabBtn);
-                });
-
-                // Botão de Nova Aba estilo HeidiSQL (+)
-                const addBtn = document.createElement('button');
-                addBtn.className = "px-2 py-1.5 text-xs text-gray-400 hover:text-teal-300 hover:bg-gray-800 rounded transition flex items-center gap-1 border border-transparent hover:border-gray-700 shrink-0";
-                addBtn.title = "Nova Aba de Consulta";
-                addBtn.onclick = () => this.addNewTab();
-                addBtn.innerHTML = `<i class="fa-solid fa-plus"></i>`;
-                container.appendChild(addBtn);
-            }
-        }
-
-        const tabManager = new TabManager();
-
-        // ==========================================
-        //  CONTROLADORES DA INTERFACE DO USUÁRIO
-        // ==========================================
-
-        let activeModalCode = "";
-
-        document.addEventListener('DOMContentLoaded', () => {
-            refreshExplorer();
+        window.onload = function() {
+            renderTabs();
+            renderExplorer();
             renderLessons();
-            tabManager.renderTabs();
-            tabManager.loadActiveTabContent();
-            
-            // Atalho de Teclado
-            document.getElementById('sql-editor').addEventListener('keydown', (e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                    e.preventDefault();
-                    executeSQL();
-                }
+            updateActiveBadge();
+            updateLineNumbers();
+        };
+
+        function switchSidebarTab(tabName) {
+            ['explorer', 'lessons', 'datatypes'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.add('hidden');
+                const btn = document.getElementById(`tab-${t}-btn`);
+                btn.classList.remove('border-teal-400', 'text-teal-400', 'bg-slate-900');
+                btn.classList.add('border-transparent', 'text-slate-400');
             });
-        });
 
-        function switchSidebarTab(tab) {
-            const expTab = document.getElementById('tab-explorer');
-            const lesTab = document.getElementById('tab-lessons');
-            const datTab = document.getElementById('tab-datatypes');
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-${tabName}-btn`);
+            activeBtn.classList.remove('border-transparent', 'text-slate-400');
+            activeBtn.classList.add('border-teal-400', 'text-teal-400', 'bg-slate-900');
+        }
 
-            const expBtn = document.getElementById('tab-explorer-btn');
-            const lesBtn = document.getElementById('tab-lessons-btn');
-            const datBtn = document.getElementById('tab-datatypes-btn');
+        function renderTabs() {
+            const container = document.getElementById('query-tabs-container');
+            container.innerHTML = '';
 
-            // Reset tab visibility
-            expTab.classList.add('hidden');
-            lesTab.classList.add('hidden');
-            datTab.classList.add('hidden');
+            queryTabs.forEach(tab => {
+                const isActive = tab.id === activeTabId;
+                const tabEl = document.createElement('div');
+                tabEl.className = `flex items-center space-x-2 px-3 py-1.5 text-xs font-mono rounded-t-lg border-t border-x cursor-pointer transition select-none ${
+                    isActive 
+                    ? 'bg-slate-950 border-slate-700 text-teal-300 font-bold' 
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+                }`;
+                tabEl.onclick = () => selectTab(tab.id);
 
-            // Reset tab styles
-            const activeStyle = "flex-1 py-3 text-center border-b-2 border-teal-400 text-teal-400 bg-gray-800/50 transition";
-            const inactiveStyle = "flex-1 py-3 text-center border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition";
+                tabEl.innerHTML = `
+                    <i class="fa-solid fa-code text-[10px] opacity-70"></i>
+                    <span>${tab.name}</span>
+                    ${queryTabs.length > 1 ? `<i class="fa-solid fa-xmark hover:text-red-400 ml-1.5 p-0.5 rounded" onclick="closeTab(event, ${tab.id})"></i>` : ''}
+                `;
+                container.appendChild(tabEl);
+            });
 
-            expBtn.className = inactiveStyle;
-            lesBtn.className = inactiveStyle;
-            datBtn.className = inactiveStyle;
-
-            if (tab === 'explorer') {
-                expTab.classList.remove('hidden');
-                expBtn.className = activeStyle;
-            } else if (tab === 'lessons') {
-                lesTab.classList.remove('hidden');
-                lesBtn.className = activeStyle;
-            } else if (tab === 'datatypes') {
-                datTab.classList.remove('hidden');
-                datBtn.className = activeStyle;
+            const current = queryTabs.find(t => t.id === activeTabId);
+            if (current) {
+                document.getElementById('sql-editor').value = current.code;
+                updateLineNumbers();
             }
         }
 
-        function refreshExplorer() {
-            const tree = document.getElementById('db-tree');
-            const activeBadge = document.getElementById('active-db-badge');
-            
-            tree.innerHTML = '';
+        function createNewTab() {
+            tabCounter++;
+            const newTab = {
+                id: Date.now(),
+                name: `Consulta ${tabCounter}`,
+                code: '-- Nova consulta SQL\n'
+            };
+            queryTabs.push(newTab);
+            activeTabId = newTab.id;
+            renderTabs();
+        }
 
-            if (dbEngine.currentDB) {
-                activeBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span> DB Ativo: <strong class="text-white">${dbEngine.currentDB}</strong>`;
-            } else {
-                activeBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> Nenhum BD Selecionado`;
+        function selectTab(id) {
+            saveCurrentTabCode();
+            activeTabId = id;
+            renderTabs();
+        }
+
+        function closeTab(e, id) {
+            e.stopPropagation();
+            if (queryTabs.length <= 1) return;
+            queryTabs = queryTabs.filter(t => t.id !== id);
+            if (activeTabId === id) {
+                activeTabId = queryTabs[queryTabs.length - 1].id;
             }
+            renderTabs();
+        }
 
-            const dbNames = Object.keys(dbEngine.databases);
-            if (dbNames.length === 0) {
-                tree.innerHTML = `<p class="text-gray-500 text-xs italic">Nenhum banco de dados criado.</p>`;
+        function saveCurrentTabCode() {
+            const current = queryTabs.find(t => t.id === activeTabId);
+            if (current) {
+                current.code = document.getElementById('sql-editor').value;
+            }
+        }
+
+        function onEditorInputChange() {
+            saveCurrentTabCode();
+            updateLineNumbers();
+        }
+
+        function updateLineNumbers() {
+            const text = document.getElementById('sql-editor').value;
+            const lines = text.split('\n').length;
+            const lineNumEl = document.getElementById('editor-line-numbers');
+            let numbersHtml = '';
+            for (let i = 1; i <= Math.max(lines, 1); i++) {
+                numbersHtml += `${i}<br>`;
+            }
+            lineNumEl.innerHTML = numbersHtml;
+        }
+
+        function syncEditorScroll() {
+            const editor = document.getElementById('sql-editor');
+            const lineNumbers = document.getElementById('editor-line-numbers');
+            lineNumbers.scrollTop = editor.scrollTop;
+        }
+
+        function insertSnippet(snippet) {
+            const editor = document.getElementById('sql-editor');
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            const text = editor.value;
+            editor.value = text.substring(0, start) + snippet + text.substring(end);
+            editor.focus();
+            editor.selectionStart = editor.selectionEnd = start + snippet.length;
+            onEditorInputChange();
+        }
+
+        function clearEditor() {
+            document.getElementById('sql-editor').value = '';
+            onEditorInputChange();
+        }
+
+        function formatSQLCode() {
+            const editor = document.getElementById('sql-editor');
+            let code = editor.value;
+
+            const keywords = ['SELECT', 'FROM', 'WHERE', 'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM', 'CREATE TABLE', 'CREATE DATABASE', 'USE', 'GROUP BY', 'ORDER BY', 'LIMIT', 'INNER JOIN', 'LEFT JOIN', 'ON', 'PRIMARY KEY', 'AUTO_INCREMENT', 'NOT NULL', 'CHECK', 'DROP TABLE', 'DESCRIBE'];
+            
+            keywords.forEach(kw => {
+                const regex = new RegExp(`\\b${kw}\\b`, 'gi');
+                code = code.replace(regex, kw);
+            });
+
+            editor.value = code;
+            onEditorInputChange();
+        }
+
+        function renderExplorer() {
+            const treeContainer = document.getElementById('db-tree');
+            treeContainer.innerHTML = '';
+
+            const dbs = dbEngine.databases;
+            const dbKeys = Object.keys(dbs);
+
+            if (dbKeys.length === 0) {
+                treeContainer.innerHTML = `<p class="text-xs text-slate-500 italic p-2">Nenhum banco de dados criado.</p>`;
                 return;
             }
 
-            dbNames.forEach(dbName => {
-                const isCurrent = dbEngine.currentDB && dbName.toLowerCase() === dbEngine.currentDB.toLowerCase();
-                const dbElement = document.createElement('div');
-                dbElement.className = `rounded p-2 transition ${isCurrent ? 'bg-gray-700/80 border border-teal-500/40' : 'bg-gray-800/50 hover:bg-gray-700/40'}`;
+            dbKeys.forEach(dbName => {
+                const isCurrent = dbEngine.currentDB && dbEngine.currentDB.toLowerCase() === dbName.toLowerCase();
+                const dbGroup = document.createElement('div');
+                dbGroup.className = `rounded-lg border transition ${isCurrent ? 'bg-slate-900/90 border-teal-800/80' : 'bg-slate-900/40 border-slate-800/60'}`;
 
-                const tables = Object.keys(dbEngine.databases[dbName].tables);
+                const dbHeader = document.createElement('div');
+                dbHeader.className = `p-2 flex items-center justify-between cursor-pointer text-xs font-bold ${isCurrent ? 'text-teal-300' : 'text-slate-300 hover:text-white'}`;
+                dbHeader.onclick = () => {
+                    dbEngine.currentDB = dbName;
+                    updateActiveBadge();
+                    renderExplorer();
+                };
 
-                let tablesHTML = '';
-                if (tables.length > 0) {
-                    tablesHTML = `<div class="ml-4 mt-2 space-y-1 border-l border-gray-600 pl-2">`;
-                    tables.forEach(tName => {
-                        const cols = dbEngine.databases[dbName].tables[tName].columns;
-                        tablesHTML += `
-                            <div class="group">
-                                <div class="flex items-center justify-between text-xs text-gray-300 py-1 px-1 rounded hover:bg-gray-700/60 hover:text-teal-300 cursor-pointer transition" onclick="showCreateTableModal('${dbName}', '${tName}')" title="Clique para ver o CREATE TABLE">
-                                    <span class="flex items-center gap-1.5 font-medium">
-                                        <i class="fa-solid fa-table text-gray-500 group-hover:text-teal-400"></i> ${tName}
-                                    </span>
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[10px] text-gray-400 group-hover:text-teal-300 border border-gray-600 group-hover:border-teal-500/50 px-1 rounded bg-gray-900/50">CREATE</span>
-                                        <span class="text-[10px] text-gray-500">(${dbEngine.databases[dbName].tables[tName].data.length})</span>
-                                    </div>
-                                </div>
-                                <div class="ml-3 text-[11px] text-gray-500 space-y-0.5 hidden group-hover:block border-l border-gray-700 pl-2 py-1">
-                                    ${cols.map(c => `<div>• <span class="text-gray-300">${c.name}</span> <span class="text-gray-500 font-mono text-[10px]">(${c.type})</span></div>`).join('')}
-                                </div>
-                            </div>
-                        `;
-                    });
-                    tablesHTML += `</div>`;
-                } else {
-                    tablesHTML = `<div class="ml-4 mt-1 text-[11px] text-gray-500 italic">Sem tabelas</div>`;
-                }
-
-                dbElement.innerHTML = `
-                    <div class="flex items-center justify-between font-medium cursor-pointer" onclick="setQueryToEditor('use ${dbName};')">
-                        <span class="flex items-center gap-2 ${isCurrent ? 'text-teal-300 font-bold' : 'text-gray-300'}">
-                            <i class="fa-solid fa-database ${isCurrent ? 'text-teal-400' : 'text-gray-500'}"></i>
-                            ${dbName}
-                        </span>
-                        ${isCurrent ? '<span class="text-[10px] bg-teal-900 text-teal-300 px-1.5 py-0.5 rounded">EM USO</span>' : ''}
+                dbHeader.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-database ${isCurrent ? 'text-teal-400' : 'text-slate-500'}"></i>
+                        <span>${dbName}</span>
                     </div>
-                    ${tablesHTML}
+                    ${isCurrent ? `<span class="text-[9px] bg-teal-950 text-teal-400 border border-teal-800 px-1.5 py-0.2 rounded font-mono">ATIVO</span>` : ''}
                 `;
 
-                tree.appendChild(dbElement);
+                const tablesObj = dbs[dbName].tables;
+                const tableKeys = Object.keys(tablesObj);
+
+                const tablesContainer = document.createElement('div');
+                tablesContainer.className = 'pl-4 pr-2 pb-2 space-y-1';
+
+                if (tableKeys.length === 0) {
+                    tablesContainer.innerHTML = `<p class="text-[11px] text-slate-600 italic">Sem tabelas</p>`;
+                } else {
+                    tableKeys.forEach(tblName => {
+                        const tbl = tablesObj[tblName];
+                        const tblItem = document.createElement('div');
+                        tblItem.className = 'text-xs text-slate-400 hover:text-slate-200 bg-slate-950/40 hover:bg-slate-800/60 p-1.5 rounded border border-slate-800/40 flex items-center justify-between group';
+                        
+                        tblItem.innerHTML = `
+                            <div class="flex items-center space-x-2 cursor-pointer truncate" onclick="insertSnippet('SELECT * FROM ${tblName};')">
+                                <i class="fa-solid fa-table text-slate-500 group-hover:text-teal-400"></i>
+                                <span class="font-mono">${tblName}</span>
+                            </div>
+                            <button onclick="viewTableDDL('${dbName}', '${tblName}')" class="text-[10px] text-slate-500 hover:text-teal-300 p-1 rounded" title="Ver DDL CREATE TABLE">
+                                <i class="fa-solid fa-code"></i>
+                            </button>
+                        `;
+                        tablesContainer.appendChild(tblItem);
+                    });
+                }
+
+                dbGroup.appendChild(dbHeader);
+                dbGroup.appendChild(tablesContainer);
+                treeContainer.appendChild(dbGroup);
             });
         }
 
-        // Abre o modal com o código DDL da tabela clicada
-        function showCreateTableModal(dbName, tableName) {
-            const createSql = dbEngine.generateCreateTableSQL(dbName, tableName);
-            if (!createSql) return;
+        function refreshExplorer() {
+            renderExplorer();
+            updateActiveBadge();
+        }
 
-            activeModalCode = createSql;
-            document.getElementById('modal-table-title').innerText = `Estrutura CREATE TABLE : \`${tableName}\``;
-            document.getElementById('modal-code-content').innerText = createSql;
+        function updateActiveBadge() {
+            const badge = document.getElementById('active-db-name');
+            if (dbEngine.currentDB) {
+                badge.innerText = dbEngine.currentDB;
+            } else {
+                badge.innerText = 'Nenhum';
+            }
+        }
+
+        function renderLessons() {
+            const container = document.getElementById('lessons-list');
+            container.innerHTML = '';
+
+            guidedLessons.forEach((lesson, index) => {
+                const card = document.createElement('div');
+                card.className = "p-3 bg-slate-900/80 border border-slate-800 rounded-lg space-y-2 hover:border-slate-700 transition";
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-bold text-teal-300">${lesson.title}</h4>
+                        <button onclick="applyLessonCode(${index})" class="text-[10px] bg-teal-950 hover:bg-teal-900 text-teal-300 border border-teal-800 px-2 py-0.5 rounded flex items-center gap-1 transition">
+                            <i class="fa-solid fa-arrow-right"></i> Aplicar
+                        </button>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">${lesson.description}</p>
+                    <div class="bg-slate-950 p-2 rounded border border-slate-800/80">
+                        <code class="text-[11px] text-emerald-400 code-font whitespace-pre-wrap">${lesson.sql}</code>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function applyLessonCode(index) {
+            const lesson = guidedLessons[index];
+            document.getElementById('sql-editor').value = lesson.sql;
+            onEditorInputChange();
+        }
+
+        function executeSQL() {
+            const startTime = performance.now();
+            const sql = document.getElementById('sql-editor').value;
+
+            const results = dbEngine.execute(sql);
+            const endTime = performance.now();
+            const duration = (endTime - startTime).toFixed(2);
+
+            document.getElementById('execution-time').innerText = `(${duration} ms)`;
+
+            renderExecutionResults(results);
+            refreshExplorer();
+        }
+
+        let lastSelectResult = null;
+
+        function renderExecutionResults(results) {
+            const container = document.getElementById('result-container');
+            const statusInd = document.getElementById('status-indicator');
+            const exportCsvBtn = document.getElementById('export-csv-btn');
             
-            // Restaura o estado do botão de cópia
-            document.getElementById('copy-btn-text').innerText = "Copiar Código";
-            document.getElementById('copy-btn').className = "px-3.5 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-teal-300 font-semibold rounded border border-gray-600 transition flex items-center gap-1.5";
+            container.innerHTML = '';
+            exportCsvBtn.classList.add('hidden');
+            lastSelectResult = null;
 
+            if (!results || results.length === 0) return;
+
+            const lastResult = results[results.length - 1];
+
+            if (lastResult.type === 'error') {
+                statusInd.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500"></span> <span class="text-red-400 font-bold">Erro SQL</span>`;
+                container.innerHTML = `
+                    <div class="bg-red-950/40 border border-red-900/80 rounded-lg p-4 space-y-2 animate-fade-in">
+                        <div class="flex items-center space-x-2 text-red-400 font-bold text-xs">
+                            <i class="fa-solid fa-circle-exclamation"></i>
+                            <span>Falha na Execução do Comando</span>
+                        </div>
+                        <p class="text-xs text-red-300 font-mono leading-relaxed">${lastResult.message}</p>
+                        ${lastResult.statement ? `<p class="text-[11px] text-slate-500 font-mono mt-1">Comando: "${lastResult.statement}"</p>` : ''}
+                    </div>
+                `;
+                return;
+            }
+
+            statusInd.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> <span class="text-emerald-400 font-bold">Sucesso</span>`;
+
+            results.forEach(res => {
+                if (res.type === 'select') {
+                    lastSelectResult = res;
+                    exportCsvBtn.classList.remove('hidden');
+
+                    const tableWrapper = document.createElement('div');
+                    tableWrapper.className = "overflow-x-auto border border-slate-800 rounded-lg bg-slate-950 mb-4 animate-fade-in";
+
+                    if (res.data.length === 0) {
+                        tableWrapper.innerHTML = `
+                            <div class="p-4 text-xs text-slate-500 italic text-center">
+                                Conjunto de resultados vazio (0 linhas retornadas).
+                            </div>
+                        `;
+                    } else {
+                        let tableHtml = `<table class="w-full text-left text-xs code-font border-collapse">`;
+                        
+                        // Header
+                        tableHtml += `<thead class="bg-slate-900 text-teal-300 border-b border-slate-800 uppercase tracking-wider"><tr>`;
+                        res.columns.forEach(col => {
+                            tableHtml += `<th class="p-2.5 border-r border-slate-800/80 font-bold">${col}</th>`;
+                        });
+                        tableHtml += `</tr></thead><tbody class="divide-y divide-slate-800/60">`;
+
+                        // Body
+                        res.data.forEach((row, rIdx) => {
+                            tableHtml += `<tr class="${rIdx % 2 === 0 ? 'bg-slate-950' : 'bg-slate-900/40'} hover:bg-slate-800/50 transition">`;
+                            res.columns.forEach(col => {
+                                const val = row[col];
+                                const displayVal = val === null ? `<span class="text-slate-600 font-sans italic">NULL</span>` : val;
+                                tableHtml += `<td class="p-2.5 border-r border-slate-800/60 text-slate-200">${displayVal}</td>`;
+                            });
+                            tableHtml += `</tr>`;
+                        });
+
+                        tableHtml += `</tbody></table>`;
+                        tableWrapper.innerHTML = tableHtml;
+                    }
+
+                    container.appendChild(tableWrapper);
+
+                } else if (res.type === 'success' || res.type === 'info') {
+                    const msgBox = document.createElement('div');
+                    msgBox.className = "bg-slate-900/90 border border-slate-800 rounded-lg p-3 text-xs font-mono text-emerald-400 mb-2 flex items-center gap-2";
+                    msgBox.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> <span>${res.message}</span>`;
+                    container.appendChild(msgBox);
+                }
+            });
+        }
+
+        function exportResultCSV() {
+            if (!lastSelectResult || !lastSelectResult.data || lastSelectResult.data.length === 0) return;
+
+            const cols = lastSelectResult.columns;
+            let csv = cols.join(',') + '\n';
+
+            lastSelectResult.data.forEach(row => {
+                const line = cols.map(c => {
+                    let val = row[c];
+                    if (val === null || val === undefined) return '';
+                    return `"${String(val).replace(/"/g, '""')}"`;
+                }).join(',');
+                csv += line + '\n';
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `resultado_mariadb_${Date.now()}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function openERModal() {
+            const modal = document.getElementById('er-modal');
+            const container = document.getElementById('er-diagram-container');
+            container.innerHTML = '';
+
+            if (!dbEngine.currentDB) {
+                container.innerHTML = `<p class="text-slate-400 text-sm italic">Selecione ou crie um banco de dados para visualizar o esquema ER.</p>`;
+                modal.classList.remove('hidden');
+                return;
+            }
+
+            const db = dbEngine.databases[dbEngine.currentDB];
+            const tables = db.tables;
+            const tableKeys = Object.keys(tables);
+
+            if (tableKeys.length === 0) {
+                container.innerHTML = `<p class="text-slate-400 text-sm italic">Nenhuma tabela cadastrada neste banco de dados.</p>`;
+            } else {
+                tableKeys.forEach(tName => {
+                    const tbl = tables[tName];
+                    const card = document.createElement('div');
+                    card.className = "w-64 bg-slate-900 border-2 border-teal-800/80 rounded-xl shadow-xl overflow-hidden shrink-0";
+
+                    let cardHtml = `
+                        <div class="bg-gradient-to-r from-teal-900/80 to-slate-900 p-3 border-b border-teal-800/80 flex items-center justify-between">
+                            <span class="font-bold text-xs text-teal-300 font-mono"><i class="fa-solid fa-table mr-1.5"></i>${tName}</span>
+                            <span class="text-[10px] bg-slate-950 text-slate-400 px-1.5 py-0.5 rounded font-mono">${tbl.data.length} linhas</span>
+                        </div>
+                        <div class="p-2 space-y-1 text-xs code-font">
+                    `;
+
+                    tbl.columns.forEach(col => {
+                        cardHtml += `
+                            <div class="flex items-center justify-between p-1 rounded hover:bg-slate-800/60">
+                                <div class="flex items-center space-x-1.5">
+                                    ${col.pk ? '<i class="fa-solid fa-key text-amber-400 text-[10px]" title="Primary Key"></i>' : '<i class="fa-solid fa-columns text-slate-600 text-[10px]"></i>'}
+                                    <span class="${col.pk ? 'font-bold text-white' : 'text-slate-300'}">${col.name}</span>
+                                </div>
+                                <span class="text-[10px] text-teal-400">${col.type}</span>
+                            </div>
+                        `;
+                    });
+
+                    cardHtml += `</div>`;
+                    card.innerHTML = cardHtml;
+                    container.appendChild(card);
+                });
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeERModal() {
+            document.getElementById('er-modal').classList.add('hidden');
+        }
+
+        let currentModalCode = '';
+
+        function viewTableDDL(dbName, tableName) {
+            const ddl = dbEngine.generateCreateTableSQL(dbName, tableName);
+            if (!ddl) return;
+
+            currentModalCode = ddl;
+            document.getElementById('modal-table-title').innerText = `Estrutura: ${tableName}`;
+            document.getElementById('modal-code-content').innerText = ddl;
             document.getElementById('create-modal').classList.remove('hidden');
         }
 
@@ -1380,265 +1608,101 @@
         }
 
         function copyModalCode() {
-            if (!activeModalCode) return;
-            
-            // Método compatível com iframes
-            const tempTextArea = document.createElement('textarea');
-            tempTextArea.value = activeModalCode;
-            document.body.appendChild(tempTextArea);
-            tempTextArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(tempTextArea);
-
-            const copyBtnText = document.getElementById('copy-btn-text');
-            const copyBtn = document.getElementById('copy-btn');
-            
-            copyBtnText.innerText = "Copiado!";
-            copyBtn.className = "px-3.5 py-1.5 text-xs bg-teal-900/80 text-teal-200 font-semibold rounded border border-teal-500 transition flex items-center gap-1.5";
-
-            setTimeout(() => {
-                copyBtnText.innerText = "Copiar Código";
-                copyBtn.className = "px-3.5 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-teal-300 font-semibold rounded border border-gray-600 transition flex items-center gap-1.5";
-            }, 2000);
+            navigator.clipboard.writeText(currentModalCode);
+            const btnText = document.getElementById('copy-btn-text');
+            btnText.innerText = 'Copiado!';
+            setTimeout(() => btnText.innerText = 'Copiar Código', 2000);
         }
 
         function sendCodeToEditor() {
-            if (!activeModalCode) return;
-            setQueryToEditor(activeModalCode);
+            insertSnippet('\n' + currentModalCode + '\n');
             closeCreateModal();
         }
 
-        function setQueryToEditor(sql) {
-            const editor = document.getElementById('sql-editor');
-            editor.value = sql;
-            tabManager.syncCurrentTabContent();
-            tabManager.renderTabs();
-            editor.focus();
-        }
-
-        function onEditorInputChange() {
-            tabManager.syncCurrentTabContent();
-            tabManager.renderTabs();
-        }
-
-        function clearEditor() {
-            const editor = document.getElementById('sql-editor');
-            editor.value = '';
-            tabManager.syncCurrentTabContent();
-            tabManager.renderTabs();
-        }
-
-        function executeSQL() {
-            const editor = document.getElementById('sql-editor');
-            const resultContainer = document.getElementById('result-container');
-            const execTimeEl = document.getElementById('execution-time');
-            const statusInd = document.getElementById('status-indicator');
-
-            const sql = editor.value;
-            if (!sql.trim()) return;
-
-            const startTime = performance.now();
-            const results = dbEngine.execute(sql);
-            const endTime = performance.now();
-
-            execTimeEl.innerText = `(${(endTime - startTime).toFixed(2)} ms)`;
-            resultContainer.innerHTML = '';
-
-            let hasError = false;
-
-            results.forEach((res) => {
-                const resDiv = document.createElement('div');
-                resDiv.className = 'mb-4 last:mb-0';
-
-                if (res.type === 'error') {
-                    hasError = true;
-                    resDiv.innerHTML = `
-                        <div class="bg-red-950/80 border border-red-800/80 text-red-200 p-3 rounded text-xs space-y-1 font-mono">
-                            <div class="font-bold flex items-center gap-2">
-                                <i class="fa-solid fa-triangle-exclamation text-red-400"></i> Erro de Execução
-                            </div>
-                            <div>${res.message}</div>
-                            ${res.statement ? `<div class="text-red-400/70 text-[11px] mt-1">Comando: "${res.statement}"</div>` : ''}
-                        </div>
-                    `;
-                } else if (res.type === 'success') {
-                    resDiv.innerHTML = `
-                        <div class="bg-emerald-950/50 border border-emerald-800/50 text-emerald-300 p-2.5 rounded text-xs flex items-center gap-2">
-                            <i class="fa-solid fa-circle-check text-emerald-400"></i>
-                            <span>${res.message}</span>
-                        </div>
-                    `;
-                } else if (res.type === 'select') {
-                    if (res.data.length === 0) {
-                        resDiv.innerHTML = `
-                            <div class="text-gray-400 text-xs italic bg-gray-900 p-3 rounded border border-gray-800">
-                                Consulta executada com sucesso. Nenhum registro retornado.
-                            </div>
-                        `;
-                    } else {
-                        let tableHTML = `
-                            <div class="overflow-x-auto border border-gray-800 rounded">
-                                <table class="w-full text-left text-xs text-gray-300 font-mono">
-                                    <thead class="bg-gray-800/90 text-gray-200 uppercase font-semibold border-b border-gray-700">
-                                        <tr>
-                                            ${res.columns.map(c => `<th class="px-3 py-2 border-r border-gray-700/50 last:border-0">${c}</th>`).join('')}
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-gray-800/60 bg-gray-900/60">
-                        `;
-
-                        res.data.forEach(row => {
-                            tableHTML += `<tr class="hover:bg-gray-800/40">`;
-                            res.columns.forEach(c => {
-                                const val = row[c] === null ? '<span class="text-gray-600 italic">NULL</span>' : row[c];
-                                tableHTML += `<td class="px-3 py-1.5 border-r border-gray-800/50 last:border-0">${val}</td>`;
-                            });
-                            tableHTML += `</tr>`;
-                        });
-
-                        tableHTML += `
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div class="text-[11px] text-gray-500 mt-1">${res.affectedRows} linha(s) retornada(s).</div>
-                        `;
-                        resDiv.innerHTML = tableHTML;
-                    }
-                }
-
-                resultContainer.appendChild(resDiv);
-            });
-
-            if (hasError) {
-                statusInd.innerHTML = `<span class="text-red-400 font-semibold"><i class="fa-solid fa-xmark"></i> Falha</span>`;
-            } else {
-                statusInd.innerHTML = `<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-check"></i> Sucesso</span>`;
-            }
-
-            refreshExplorer();
-        }
-
-        function resetEngine() {
-            if (confirm("Deseja realmente reiniciar todo o banco de dados para os valores padrão?")) {
-                dbEngine.reset();
-                refreshExplorer();
-                document.getElementById('result-container').innerHTML = `
-                    <div class="text-emerald-400 text-xs p-3 bg-emerald-950/40 rounded border border-emerald-800/50">
-                        Banco de dados reiniciado com sucesso para o estado inicial.
-                    </div>
-                `;
-            }
-        }
-
         function exportDatabase() {
-            let sqlDump = `-- Backup Gerado pelo Simulador MariaDB\n`;
-            sqlDump += `-- Data: ${new Date().toLocaleString('pt-BR')}\n\n`;
+            let sqlDump = `-- MariaDB SQL Simulator Export\n-- Data: ${new Date().toLocaleString()}\n\n`;
 
             Object.keys(dbEngine.databases).forEach(dbName => {
-                sqlDump += `CREATE DATABASE IF NOT EXISTS \`${dbName}\`;\n`;
-                sqlDump += `USE \`${dbName}\`;\n\n`;
-
+                sqlDump += `CREATE DATABASE IF NOT EXISTS \`${dbName}\`;\nUSE \`${dbName}\`;\n\n`;
+                
                 const tables = dbEngine.databases[dbName].tables;
                 Object.keys(tables).forEach(tName => {
+                    const ddl = dbEngine.generateCreateTableSQL(dbName, tName);
+                    if (ddl) sqlDump += ddl + '\n\n';
+
                     const table = tables[tName];
-                    sqlDump += `-- Estrutura para tabela \`${tName}\`\n`;
-                    sqlDump += `DROP TABLE IF EXISTS \`${tName}\`;\n`;
-                    sqlDump += `CREATE TABLE \`${tName}\` (\n`;
-                    
-                    const colDefs = table.columns.map(c => {
-                        let def = `  \`${c.name}\` ${c.type}`;
-                        if (c.pk) def += ` PRIMARY KEY`;
-                        if (c.autoIncrement) def += ` AUTO_INCREMENT`;
-                        return def;
-                    });
-
-                    sqlDump += colDefs.join(',\n') + `\n);\n\n`;
-
                     if (table.data.length > 0) {
-                        sqlDump += `-- Inserindo dados na tabela \`${tName}\`\n`;
+                        sqlDump += `-- Inserções de Dados para ${tName}\n`;
                         table.data.forEach(row => {
-                            const cols = Object.keys(row).map(c => `\`${c}\``).join(', ');
-                            const vals = Object.values(row).map(v => typeof v === 'string' ? `'${v}'` : (v === null ? 'NULL' : v)).join(', ');
-                            sqlDump += `INSERT INTO \`${tName}\` (${cols}) VALUES (${vals});\n`;
+                            const cols = Object.keys(row);
+                            const vals = cols.map(c => {
+                                const v = row[c];
+                                if (v === null) return 'NULL';
+                                if (typeof v === 'string') return `'${v.replace(/'/g, "''")}'`;
+                                return v;
+                            });
+                            sqlDump += `INSERT INTO \`${tName}\` (\`${cols.join('`, `')}\`) VALUES (${vals.join(', ')});\n`;
                         });
-                        sqlDump += `\n`;
+                        sqlDump += '\n';
                     }
                 });
             });
 
-            const blob = new Blob([sqlDump], { type: 'text/plain;charset=utf-8' });
+            const blob = new Blob([sqlDump], { type: 'text/plain;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `backup_database_${Date.now()}.sql`;
+            a.href = url;
+            a.download = `backup_mariadb_${Date.now()}.sql`;
             a.click();
+            URL.revokeObjectURL(url);
         }
 
-        // ==========================================
-        //  ROTEIRO PRÁTICO E EXERCÍCIOS
-        // ==========================================
+        function triggerImportSQL() {
+            document.getElementById('import-file-input').click();
+        }
 
-        const lessons = [
-            {
-                title: "1. Tabela Produtos com CHECK e NOT NULL",
-                desc: "Exemplo completo de validações de CHECK (quantidade e preço), NOT NULL e INSERT múltiplo.",
-                sql: "use escola;\n\n-- Inserção de múltiplos registros em um único INSERT:\nINSERT INTO produtos (nome_produto, quantidade, fabricante, preco)\nVALUES ('Cadeira Ergonomica', 15, 'Flexform', 899.90),\n       ('Cadeira Flex', 20, 'Flexform', 1899.90);\n\n-- Visualizar resultado:\nSELECT * FROM produtos;"
-            },
-            {
-                title: "2. Criando e Selecionando BD",
-                desc: "Aprenda a criar um novo banco de dados e defini-lo como ativo (testando minúsculas).",
-                sql: "create database empresa;\nuse EMPRESA;\nshow databases;"
-            },
-            {
-                title: "3. Criando Tabelas com AUTO_INCREMENT",
-                desc: "Crie uma tabela com chave primária autoincrementável.",
-                sql: "use empresa;\n\ncreate table funcionarios (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  nome VARCHAR(100),\n  cargo VARCHAR(50),\n  salario INT\n);"
-            },
-            {
-                title: "4. Inserindo Dados (INSERT sem informar ID)",
-                desc: "Adicione novos registros omitindo o ID para testar o AUTO_INCREMENT automático.",
-                sql: "use empresa;\n\ninsert into FUNCIONARIOS (nome, cargo, salario) values ('João Silva', 'Desenvolvedor', 5000);\ninsert into funcionarios (NOME, CARGO, SALARIO) values ('Maria Santos', 'Designer', 4200);\nINSERT INTO funcionarios (nome, cargo, salario) VALUES ('Pedro Rocha', 'Gerente', 8000);"
-            },
-            {
-                title: "5. Consultando Dados (SELECT)",
-                desc: "Realize buscas simples e com filtros utilizando cláusula WHERE insensível a maiúsculas.",
-                sql: "use empresa;\n\n-- Buscar todos os registros\nselect * from FUNCIONARIOS;\n\n-- Filtrar por cargo ou salário\nselect nome, cargo from funcionarios where cargo = 'desenvolvedor';"
-            },
-            {
-                title: "6. Atualizando Dados (UPDATE com WHERE)",
-                desc: "Altere dados específicos com UPDATE e filtro WHERE funcionando perfeitamente.",
-                sql: "use empresa;\n\n-- Atualizar apenas quem tem o ID 1\nupdate funcionarios set salario = 6000 where id = 1;\n\n-- Atualizar cargo procurando nome em minúsculo\nUPDATE FUNCIONARIOS SET cargo = 'Líder Design' WHERE nome = 'maria santos';\n\nselect * from funcionarios;"
-            },
-            {
-                title: "7. Excluindo Dados (DELETE)",
-                desc: "Remova registros específicos filtrando no WHERE.",
-                sql: "use empresa;\n\ndelete from funcionarios where id = 2;\n\nselect * from funcionarios;"
+        function handleFileImport(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const content = evt.target.result;
+                document.getElementById('sql-editor').value = content;
+                onEditorInputChange();
+                executeSQL();
+            };
+            reader.readAsText(file);
+        }
+
+        let pendingConfirmCallback = null;
+
+        function confirmResetEngine() {
+            document.getElementById('confirm-title').innerText = "Reiniciar Banco de Dados";
+            document.getElementById('confirm-message').innerText = "Tem certeza que deseja restaurar o banco de dados para a configuração padrão? Todos os seus dados personalizados serão apagados.";
+            pendingConfirmCallback = () => {
+                dbEngine.reset();
+                refreshExplorer();
+                renderExecutionResults([{ type: 'info', message: 'Banco de dados restaurado com sucesso.' }]);
+            };
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        }
+
+        function closeConfirmModal(confirmed) {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            if (confirmed && pendingConfirmCallback) {
+                pendingConfirmCallback();
             }
-        ];
-
-        function renderLessons() {
-            const container = document.getElementById('lessons-list');
-            container.innerHTML = '';
-
-            lessons.forEach((l, index) => {
-                const card = document.createElement('div');
-                card.className = "bg-gray-800/60 border border-gray-700/60 p-3 rounded hover:border-teal-500/50 transition space-y-2";
-                card.innerHTML = `
-                    <div class="font-bold text-xs text-teal-300">${l.title}</div>
-                    <div class="text-[11px] text-gray-400">${l.desc}</div>
-                    <button onclick="loadLesson(${index})" class="w-full py-1 text-[11px] bg-gray-700 hover:bg-teal-700 text-gray-200 rounded transition font-medium">
-                        Carregar Exemplo
-                    </button>
-                `;
-                container.appendChild(card);
-            });
+            pendingConfirmCallback = null;
         }
 
-        function loadLesson(index) {
-            const lesson = lessons[index];
-            if (lesson) {
-                setQueryToEditor(lesson.sql);
+        // Atalho de Teclado Ctrl+Enter para Executar
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                executeSQL();
             }
-        }
+        });
     </script>
 </body>
 </html>
