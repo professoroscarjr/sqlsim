@@ -800,67 +800,293 @@
                 }
 
                 table.data.push(...insertedRows);
-                return { type: 'success', message: `${insertedRows.length} linha(s) inserida(s) com sucesso em '${tableKey}'.` };
+            return { type: 'success', message: `${insertedRows.length} linha(s) inserida(s) com sucesso em '${tableKey}'.` };
+        }
+
+        evaluateHaving(row, havingClause) {
+            if (!havingClause) return true;
+            const regex = /`?([a-zA-Z_]\w*(?:\([^)]*\))?)`?\s*(=|!=|<>|>=|<=|>|<|LIKE)\s*(.+)/i;
+            const match = havingClause.match(regex);
+            if (!match) return true;
+
+            const colInput = match[1].trim();
+            const op = match[2].toUpperCase();
+            let rawVal = match[3].trim();
+
+            if ((rawVal.startsWith("'") && rawVal.endsWith("'")) || (rawVal.startsWith('"') && rawVal.endsWith('"'))) {
+                rawVal = rawVal.slice(1, -1);
+            } else if (!isNaN(rawVal) && rawVal !== '') {
+                rawVal = Number(rawVal);
             }
 
-            handleSelect(sql) {
-                if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
+            const actualKey = Object.keys(row).find(k => k.toLowerCase() === colInput.toLowerCase()) || colInput;
+            const rowVal = row[actualKey];
 
-                const regex = /SELECT\s+(.+)\s+FROM\s+`?(\w+)`?(?:\s+WHERE\s+(.+))?/i;
-                const match = sql.match(regex);
+            if (rowVal === null || rowVal === undefined) return false;
 
-                if (!match) throw new Error("Sintaxe SELECT incorreta. Exemplo: SELECT * FROM tabela WHERE col = 'val';");
-
-                const colsClause = match[1].trim();
-                const tableName = match[2].trim();
-                const whereClause = match[3] ? match[3].trim() : null;
-
-                const tables = this.databases[this.currentDB].tables;
-                const tableKey = this.getCaseInsensitiveKey(tables, tableName);
-                if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
-
-                const table = tables[tableKey];
-                let resultData = [...table.data];
-
-                // Filtro WHERE
-                if (whereClause) {
-                    resultData = resultData.filter(row => this.evaluateWhere(row, table, whereClause));
+            if (typeof rowVal === 'number' || !isNaN(rowVal)) {
+                const numRowVal = Number(rowVal);
+                const numRawVal = Number(rawVal);
+                switch (op) {
+                    case '=': return numRowVal === numRawVal;
+                    case '!=':
+                    case '<>': return numRowVal !== numRawVal;
+                    case '>': return numRowVal > numRawVal;
+                    case '<': return numRowVal < numRawVal;
+                    case '>=': return numRowVal >= numRawVal;
+                    case '<=': return numRowVal <= numRawVal;
+                    default: return true;
                 }
+            }
 
-                // Seleção de colunas
-                let selectedCols = [];
-                if (colsClause === '*') {
-                    selectedCols = table.columns.map(c => c.name);
-                } else {
-                    const requestedCols = colsClause.split(',').map(c => c.trim().replace(/`/g, ''));
-                    requestedCols.forEach(reqCol => {
-                        const actualCol = table.columns.find(c => c.name.toLowerCase() === reqCol.toLowerCase());
-                        if (actualCol) {
-                            selectedCols.push(actualCol.name);
-                        } else {
-                            selectedCols.push(reqCol); // Mantém caso seja expressão não mapeada
-                        }
-                    });
-                }
+            switch (op) {
+                case '=': return String(rowVal) === String(rawVal);
+                case '!=':
+                case '<>': return String(rowVal) !== String(rawVal);
+                default: return true;
+            }
+        }
 
-                // Projeção dos dados
-                const finalRows = resultData.map(row => {
-                    let newRow = {};
-                    selectedCols.forEach(col => {
-                        newRow[col] = row[col] !== undefined ? row[col] : null;
-                    });
-                    return newRow;
-                });
+        parseSelectExpr(rawExpr, table) {
+            let expr = rawExpr.trim();
+            let alias = expr.replace(/`/g, '');
 
+            const aliasMatch = expr.match(/^(.+?)\s+(?:AS\s+)?`?([a-zA-Z_]\w*)`?$/i);
+            if (aliasMatch && !expr.endsWith(')')) {
+                expr = aliasMatch[1].trim();
+                alias = aliasMatch[2].trim();
+            }
+
+            const aggMatch = expr.match(/^(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*(.*?)\s*\)$/i);
+            if (aggMatch) {
+                const aggType = aggMatch[1].toUpperCase();
+                let aggCol = aggMatch[2].trim().replace(/`/g, '');
                 return {
-                    type: 'select',
-                    columns: selectedCols,
-                    data: finalRows,
-                    affectedRows: finalRows.length
+                    isAggregate: true,
+                    aggType: aggType,
+                    aggCol: aggCol,
+                    alias: alias,
+                    raw: rawExpr
                 };
             }
 
-            handleUpdate(sql) {
+            const cleanColName = expr.replace(/`/g, '');
+            const actualCol = table.columns.find(c => c.name.toLowerCase() === cleanColName.toLowerCase());
+            return {
+                isAggregate: false,
+                colName: actualCol ? actualCol.name : cleanColName,
+                alias: alias,
+                raw: rawExpr
+            };
+        }
+
+        computeAggregate(aggType, aggCol, rows, table) {
+            if (aggType === 'COUNT') {
+                if (aggCol === '*') return rows.length;
+                const actualCol = table.columns.find(c => c.name.toLowerCase() === aggCol.toLowerCase());
+                const colName = actualCol ? actualCol.name : aggCol;
+                return rows.filter(r => r[colName] !== null && r[colName] !== undefined).length;
+            }
+
+            const actualCol = table.columns.find(c => c.name.toLowerCase() === aggCol.toLowerCase());
+            const colName = actualCol ? actualCol.name : aggCol;
+            const values = rows
+                .map(r => r[colName])
+                .filter(v => v !== null && v !== undefined);
+
+            if (values.length === 0) return null;
+
+            if (aggType === 'SUM') {
+                return values.reduce((acc, val) => acc + (Number(val) || 0), 0);
+            }
+            if (aggType === 'AVG') {
+                const sum = values.reduce((acc, val) => acc + (Number(val) || 0), 0);
+                const avg = sum / values.length;
+                return Number.isInteger(avg) ? avg : Number(avg.toFixed(2));
+            }
+            if (aggType === 'MIN') {
+                const nums = values.map(Number);
+                if (nums.every(n => !isNaN(n))) {
+                    return Math.min(...nums);
+                }
+                return values.reduce((min, val) => String(val) < String(min) ? val : min, values[0]);
+            }
+            if (aggType === 'MAX') {
+                const nums = values.map(Number);
+                if (nums.every(n => !isNaN(n))) {
+                    return Math.max(...nums);
+                }
+                return values.reduce((max, val) => String(val) > String(max) ? val : max, values[0]);
+            }
+            return null;
+        }
+
+        handleSelect(sql) {
+            if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
+
+            let text = sql.trim().replace(/;?\s*$/, '');
+
+            const fromIdx = text.search(/\bFROM\b/i);
+            if (fromIdx === -1) throw new Error("Sintaxe SELECT incorreta: cláusula 'FROM' não encontrada.");
+
+            const selectPart = text.substring(6, fromIdx).trim();
+            const rest = text.substring(fromIdx + 4).trim();
+
+            const tableMatch = rest.match(/^`?(\w+)`?/);
+            if (!tableMatch) throw new Error("Nome de tabela inválido na cláusula FROM.");
+            const tableName = tableMatch[1];
+
+            const afterTable = rest.substring(tableMatch[0].length).trim();
+
+            let whereClause = null;
+            let groupByClause = null;
+            let havingClause = null;
+            let orderByClause = null;
+            let limitClause = null;
+
+            const clauseKeywords = [
+                { name: 'WHERE', regex: /\bWHERE\b/i },
+                { name: 'GROUP BY', regex: /\bGROUP\s+BY\b/i },
+                { name: 'HAVING', regex: /\bHAVING\b/i },
+                { name: 'ORDER BY', regex: /\bORDER\s+BY\b/i },
+                { name: 'LIMIT', regex: /\bLIMIT\b/i }
+            ];
+
+            let clauseMatches = [];
+            clauseKeywords.forEach(ck => {
+                const match = ck.regex.exec(afterTable);
+                if (match) {
+                    clauseMatches.push({ name: ck.name, index: match.index, length: match[0].length });
+                }
+            });
+
+            clauseMatches.sort((a, b) => a.index - b.index);
+
+            for (let i = 0; i < clauseMatches.length; i++) {
+                const curr = clauseMatches[i];
+                const start = curr.index + curr.length;
+                const end = (i + 1 < clauseMatches.length) ? clauseMatches[i + 1].index : afterTable.length;
+                const content = afterTable.substring(start, end).trim();
+
+                if (curr.name === 'WHERE') whereClause = content;
+                else if (curr.name === 'GROUP BY') groupByClause = content;
+                else if (curr.name === 'HAVING') havingClause = content;
+                else if (curr.name === 'ORDER BY') orderByClause = content;
+                else if (curr.name === 'LIMIT') limitClause = content;
+            }
+
+            const tables = this.databases[this.currentDB].tables;
+            const tableKey = this.getCaseInsensitiveKey(tables, tableName);
+            if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
+
+            const table = tables[tableKey];
+            let resultData = [...table.data];
+
+            // 1. Filtragem WHERE
+            if (whereClause) {
+                resultData = resultData.filter(row => this.evaluateWhere(row, table, whereClause));
+            }
+
+            // 2. Projeção e Agregação
+            let rawSelectItems = selectPart === '*' 
+                ? table.columns.map(c => c.name) 
+                : this.splitByComma(selectPart);
+
+            let parsedItems = rawSelectItems.map(raw => this.parseSelectExpr(raw, table));
+
+            const hasAggregates = parsedItems.some(item => item.isAggregate);
+            const isGrouped = groupByClause !== null || hasAggregates;
+
+            let finalRows = [];
+            let outputColumns = parsedItems.map(i => i.alias);
+
+            if (isGrouped) {
+                const groups = new Map();
+
+                if (groupByClause) {
+                    const groupColInputs = groupByClause.split(',').map(c => c.trim().replace(/`/g, ''));
+                    const actualGroupCols = groupColInputs.map(g => {
+                        const found = table.columns.find(col => col.name.toLowerCase() === g.toLowerCase());
+                        return found ? found.name : g;
+                    });
+
+                    resultData.forEach(row => {
+                        const key = actualGroupCols.map(col => String(row[col] ?? 'NULL')).join('___');
+                        if (!groups.has(key)) groups.set(key, []);
+                        groups.get(key).push(row);
+                    });
+                } else {
+                    groups.set('ALL', resultData);
+                }
+
+                groups.forEach((rowsInGroup) => {
+                    let rowObj = {};
+                    parsedItems.forEach(item => {
+                        if (item.isAggregate) {
+                            rowObj[item.alias] = this.computeAggregate(item.aggType, item.aggCol, rowsInGroup, table);
+                        } else {
+                            const firstRow = rowsInGroup[0];
+                            rowObj[item.alias] = firstRow && firstRow[item.colName] !== undefined ? firstRow[item.colName] : null;
+                        }
+                    });
+                    finalRows.push(rowObj);
+                });
+
+                if (havingClause) {
+                    finalRows = finalRows.filter(row => this.evaluateHaving(row, havingClause));
+                }
+            } else {
+                finalRows = resultData.map(row => {
+                    let newRow = {};
+                    parsedItems.forEach(item => {
+                        newRow[item.alias] = row[item.colName] !== undefined ? row[item.colName] : null;
+                    });
+                    return newRow;
+                });
+            }
+
+            // ORDER BY
+            if (orderByClause) {
+                const orderMatch = orderByClause.match(/^`?(\w+)`?(?:\s+(ASC|DESC))?/i);
+                if (orderMatch) {
+                    const orderCol = orderMatch[1];
+                    const direction = (orderMatch[2] || 'ASC').toUpperCase();
+                    const actualOrderCol = outputColumns.find(c => c.toLowerCase() === orderCol.toLowerCase()) || orderCol;
+
+                    finalRows.sort((a, b) => {
+                        let valA = a[actualOrderCol];
+                        let valB = b[actualOrderCol];
+                        if (valA === valB) return 0;
+                        if (valA === null || valA === undefined) return 1;
+                        if (valB === null || valB === undefined) return -1;
+                        
+                        if (typeof valA === 'number' && typeof valB === 'number') {
+                            return direction === 'ASC' ? valA - valB : valB - valA;
+                        }
+                        return direction === 'ASC' 
+                            ? String(valA).localeCompare(String(valB)) 
+                            : String(valB).localeCompare(String(valA));
+                    });
+                }
+            }
+
+            // LIMIT
+            if (limitClause) {
+                const limitNum = parseInt(limitClause, 10);
+                if (!isNaN(limitNum) && limitNum >= 0) {
+                    finalRows = finalRows.slice(0, limitNum);
+                }
+            }
+
+            return {
+                type: 'select',
+                columns: outputColumns,
+                data: finalRows,
+                affectedRows: finalRows.length
+            };
+        }
+
+        handleUpdate(sql) {
                 if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
 
                 const regex = /UPDATE\s+`?(\w+)`?\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$/i;
@@ -1845,53 +2071,18 @@
 
         const lessons = [
             {
-                title: "1. Tabela Produtos com CHECK e NOT NULL",
-                desc: "Exemplo completo de validações de CHECK (quantidade e preço), NOT NULL e INSERT múltiplo.",
-                sql: "use escola;\n\n-- Inserção de múltiplos registros em um único INSERT:\nINSERT INTO produtos (nome_produto, quantidade, fabricante, preco)\nVALUES ('Cadeira Ergonomica', 15, 'Flexform', 899.90),\n       ('Cadeira Flex', 20, 'Flexform', 1899.90);\n\n-- Visualizar resultado:\nSELECT * FROM produtos;"
-            },
-            {
-                title: "Exemplo TB_CLIENTE (Data e Múltiplas Colunas)",
-                desc: "Criação da tabela TB_CLIENTE com campo DATE e inserção completa utilizando aspas simples.",
-                sql: "use escola;\n\nCREATE TABLE IF NOT EXISTS TB_CLIENTE (\n  ID INT PRIMARY KEY AUTO_INCREMENT,\n  Nome VARCHAR(100),\n  Email VARCHAR(100),\n  Telefone VARCHAR(20),\n  CPF VARCHAR(14),\n  Data_Cadastro DATE,\n  Logradouro VARCHAR(100),\n  Numero VARCHAR(10),\n  Complemento VARCHAR(50),\n  Bairro VARCHAR(50),\n  Cidade VARCHAR(50),\n  Estado CHAR(2),\n  CEP VARCHAR(10)\n);\n\nINSERT INTO TB_CLIENTE (Nome, Email, Telefone, CPF, Data_Cadastro, Logradouro, Numero, Complemento, Bairro, Cidade, Estado, CEP)\nVALUES ('Oscar', 'osquinha@email.com', '(11) 98765-4321', '123.456.789-01', '2024-01-20', 'Rua das Flores', '100', 'Apt 12', 'Centro', 'São Paulo', 'SP', '01000-000');\n\nSELECT * FROM TB_CLIENTE;"
-            },
-            {
-                title: "2. Criando e Selecionando BD",
-                desc: "Aprenda a criar um novo banco de dados e defini-lo como ativo (testando minúsculas).",
-                sql: "create database empresa;\nuse EMPRESA;\nshow databases;"
-            },
-            {
-                title: "3. Criando Tabelas com AUTO_INCREMENT",
-                desc: "Crie uma tabela com chave primária autoincrementável.",
-                sql: "use empresa;\n\ncreate table funcionarios (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  nome VARCHAR(100),\n  cargo VARCHAR(50),\n  salario INT\n);"
-            },
-            {
-                title: "4. Inserindo Dados (INSERT sem informar ID)",
-                desc: "Adicione novos registros omitindo o ID para testar o AUTO_INCREMENT automático.",
-                sql: "use empresa;\n\ninsert into FUNCIONARIOS (nome, cargo, salario) values ('João Silva', 'Desenvolvedor', 5000);\ninsert into funcionarios (NOME, CARGO, SALARIO) values ('Maria Santos', 'Designer', 4200);\nINSERT INTO funcionarios (nome, cargo, salario) VALUES ('Pedro Rocha', 'Gerente', 8000);"
-            },
-            {
-                title: "5. Consultando Dados (SELECT)",
-                desc: "Realize buscas simples e com filtros utilizando cláusula WHERE insensível a maiúsculas.",
-                sql: "use empresa;\n\n-- Buscar todos os registros\nselect * from FUNCIONARIOS;\n\n-- Filtrar por cargo ou salário\nselect nome, cargo from funcionarios where cargo = 'desenvolvedor';"
-            },
-            {
-                title: "6. Atualizando Dados (UPDATE com WHERE)",
-                desc: "Altere dados específicos com UPDATE e filtro WHERE funcionando perfeitamente.",
-                sql: "use empresa;\n\n-- Atualizar apenas quem tem o ID 1\nupdate funcionarios set salario = 6000 where id = 1;\n\n-- Atualizar cargo procurando nome em minúsculo\nUPDATE FUNCIONARIOS SET cargo = 'Líder Design' WHERE nome = 'maria santos';\n\nselect * from funcionarios;"
-            },
-            {
-                title: "7. Excluindo Dados (DELETE)",
-                desc: "Remova registros específicos filtrando no WHERE.",
-                sql: "use empresa;\n\ndelete from funcionarios where id = 2;\n\nselect * from funcionarios;"
-            },
-            {
-                title: "8. Variações do ALTER TABLE (ADD, DROP, MODIFY, CHANGE, RENAME)",
-                desc: "Demonstração prática de adição, exclusão, modificação, renomeação de colunas e posicionamento (FIRST/AFTER).",
-                sql: "use escola;\n\n-- 1. Adicionar nova coluna após nome_produto:\nALTER TABLE produtos ADD num_serie VARCHAR(50) AFTER nome_produto;\n\n-- 2. Modificar tipo da coluna quantidade:\nALTER TABLE produtos MODIFY quantidade INT NOT NULL;\n\n-- 3. Renomear e alterar coluna com CHANGE:\nALTER TABLE produtos CHANGE fabricante marca VARCHAR(80);\n\n-- 4. Excluir coluna com DROP:\nALTER TABLE produtos DROP COLUMN num_serie;\n\n-- 5. Renomear a própria tabela:\nALTER TABLE produtos RENAME TO estoque;\n\n-- Visualizar tabela com o novo nome:\nSELECT * FROM estoque;"
-            }
-        ];
+            title: "8. Variações do ALTER TABLE (ADD, DROP, MODIFY, CHANGE, RENAME)",
+            desc: "Demonstração prática de adição, exclusão, modificação, renomeação de colunas e posicionamento (FIRST/AFTER).",
+            sql: "use escola;\n\n-- 1. Adicionar nova coluna após nome_produto:\nALTER TABLE produtos ADD num_serie VARCHAR(50) AFTER nome_produto;\n\n-- 2. Modificar tipo da coluna quantidade:\nALTER TABLE produtos MODIFY quantidade INT NOT NULL;\n\n-- 3. Renomear e alterar coluna com CHANGE:\nALTER TABLE produtos CHANGE fabricante marca VARCHAR(80);\n\n-- 4. Excluir coluna com DROP:\nALTER TABLE produtos DROP COLUMN num_serie;\n\n-- 5. Renomear a própria tabela:\nALTER TABLE produtos RENAME TO estoque;\n\n-- Visualizar tabela com o novo nome:\nSELECT * FROM estoque;"
+        },
+        {
+            title: "9. Agrupamento com GROUP BY, HAVING e Funções de Agregação",
+            desc: "Agrupe registros e calcule agregações como COUNT, SUM, AVG, MIN e MAX.",
+            sql: "use escola;\n\n-- Agrupar alunos por curso e calcular totais e médias:\nSELECT curso, COUNT(*) AS total_alunos, AVG(idade) AS media_idade\nFROM alunos\nGROUP BY curso;\n\n-- Agrupar produtos por fabricante com filtro HAVING:\nSELECT fabricante, COUNT(*) AS total_itens, SUM(quantidade) AS estoque_total, AVG(preco) AS preco_medio\nFROM produtos\nGROUP BY fabricante\nHAVING total_itens >= 1;"
+        }
+    ];
 
-        function renderLessons() {
+    function renderLessons() {
             const container = document.getElementById('lessons-list');
             container.innerHTML = '';
 
