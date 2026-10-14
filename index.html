@@ -320,11 +320,6 @@
                 } else {
                     this.initDefaults();
                 }
-
-                // Garante que a tabela 'pedidos' de exemplo exista no banco 'escola'
-                if (this.databases['escola'] && (!this.databases['escola'].tables || !this.databases['escola'].tables['pedidos'])) {
-                    this.initDefaults();
-                }
             }
 
             initDefaults() {
@@ -357,24 +352,6 @@
                                     { id: 1, nome: 'Ana Silva', idade: 20, curso: 'Informatica' },
                                     { id: 2, nome: 'Carlos Souza', idade: 22, curso: 'Edificacoes' },
                                     { id: 3, nome: 'Mariana Lima', idade: 19, curso: 'Informatica' }
-                                ]
-                            },
-                            'pedidos': {
-                                columns: [
-                                    { name: 'id_pedido', type: 'INT', pk: true, autoIncrement: true, notNull: true },
-                                    { name: 'id_cliente', type: 'INT', pk: false, autoIncrement: false, notNull: true },
-                                    { name: 'valor_total', type: 'DECIMAL(10,2)', pk: false, autoIncrement: false, notNull: true },
-                                    { name: 'data_pedido', type: 'DATE', pk: false, autoIncrement: false, notNull: false }
-                                ],
-                                checkConstraints: ['valor_total >= 0'],
-                                data: [
-                                    { id_pedido: 1, id_cliente: 101, valor_total: 500.00, data_pedido: '2026-01-10' },
-                                    { id_pedido: 2, id_cliente: 101, valor_total: 600.00, data_pedido: '2026-01-15' },
-                                    { id_pedido: 3, id_cliente: 101, valor_total: 200.00, data_pedido: '2026-02-01' },
-                                    { id_pedido: 4, id_cliente: 102, valor_total: 1500.00, data_pedido: '2026-02-05' },
-                                    { id_pedido: 5, id_cliente: 103, valor_total: 100.00, data_pedido: '2026-02-10' },
-                                    { id_pedido: 6, id_cliente: 103, valor_total: 150.00, data_pedido: '2026-02-12' },
-                                    { id_pedido: 7, id_cliente: 103, valor_total: 200.00, data_pedido: '2026-02-15' }
                                 ]
                             }
                         }
@@ -769,7 +746,7 @@
                     });
 
                     if (columnsToInsert.length !== valuesToInsert.length) {
-                        throw new Error(`A contagem de colunas (${columnsToInsert.length}) não corresponde à contagem de valores (${valuesToInsert.length}). Colunas esperadas (${columnsToInsert.length}): [${columnsToInsert.join(', ')}].`);
+                        throw new Error(`A contagem de colunas (${columnsToInsert.length}) não corresponde à contagem de valores (${valuesToInsert.length}) em um dos registros.`);
                     }
 
                     let newRow = {};
@@ -802,314 +779,88 @@
                     });
 
                     // 4. Validação de NOT NULL
-        evaluateHaving(row, havingClause, parsedItems = []) {
-            if (!havingClause) return true;
-
-            const evaluateSingleCondition = (condStr) => {
-                const regex = /`?([a-zA-Z_]\w*(?:\([^)]*\))?)`?\s*(=|!=|<>|>=|<=|>|<|LIKE)\s*(.+)/i;
-                const match = condStr.trim().match(regex);
-                if (!match) return true;
-
-                const colInput = match[1].trim();
-                const op = match[2].toUpperCase();
-                let rawVal = match[3].trim();
-
-                if ((rawVal.startsWith("'") && rawVal.endsWith("'")) || (rawVal.startsWith('"') && rawVal.endsWith('"'))) {
-                    rawVal = rawVal.slice(1, -1);
-                } else if (!isNaN(rawVal) && rawVal !== '') {
-                    rawVal = Number(rawVal);
-                }
-
-                let actualKey = Object.keys(row).find(k => k.toLowerCase() === colInput.toLowerCase());
-
-                if (!actualKey && parsedItems && parsedItems.length > 0) {
-                    const cleanInput = colInput.replace(/\s+/g, '').toLowerCase();
-                    const matchedItem = parsedItems.find(item => {
-                        const rawClean = item.raw ? item.raw.replace(/\s+/g, '').toLowerCase() : '';
-                        return rawClean === cleanInput || rawClean.startsWith(cleanInput) || item.alias.toLowerCase() === colInput.toLowerCase();
-                    });
-                    if (matchedItem) {
-                        actualKey = matchedItem.alias;
-                    }
-                }
-
-                if (!actualKey) actualKey = colInput;
-                const rowVal = row[actualKey];
-
-                if (rowVal === null || rowVal === undefined) return false;
-
-                if (typeof rowVal === 'number' || !isNaN(rowVal)) {
-                    const numRowVal = Number(rowVal);
-                    const numRawVal = Number(rawVal);
-                    switch (op) {
-                        case '=': return numRowVal === numRawVal;
-                        case '!=':
-                        case '<>': return numRowVal !== numRawVal;
-                        case '>': return numRowVal > numRawVal;
-                        case '<': return numRowVal < numRawVal;
-                        case '>=': return numRowVal >= numRawVal;
-                        case '<=': return numRowVal <= numRawVal;
-                        default: return true;
-                    }
-                }
-
-                switch (op) {
-                    case '=': return String(rowVal) === String(rawVal);
-                    case '!=':
-                    case '<>': return String(rowVal) !== String(rawVal);
-                    default: return true;
-                }
-            };
-
-            if (/\bOR\b/i.test(havingClause)) {
-                return havingClause.split(/\bOR\b/i).some(part => evaluateSingleCondition(part));
-            } else if (/\bAND\b/i.test(havingClause)) {
-                return havingClause.split(/\bAND\b/i).every(part => evaluateSingleCondition(part));
-            } else {
-                return evaluateSingleCondition(havingClause);
-            }
-        }
-
-        parseSelectExpr(rawExpr, table) {
-            let expr = rawExpr.trim();
-            let alias = expr.replace(/`/g, '');
-
-            const aliasMatch = expr.match(/^(.+?)\s+(?:AS\s+)?`?([a-zA-Z_]\w*)`?$/i);
-            if (aliasMatch && !expr.endsWith(')')) {
-                expr = aliasMatch[1].trim();
-                alias = aliasMatch[2].trim();
-            }
-
-            const aggMatch = expr.match(/^(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*(.*?)\s*\)$/i);
-            if (aggMatch) {
-                const aggType = aggMatch[1].toUpperCase();
-                let aggCol = aggMatch[2].trim().replace(/`/g, '');
-                return {
-                    isAggregate: true,
-                    aggType: aggType,
-                    aggCol: aggCol,
-                    alias: alias,
-                    raw: rawExpr
-                };
-            }
-
-            const cleanColName = expr.replace(/`/g, '');
-            const actualCol = table.columns.find(c => c.name.toLowerCase() === cleanColName.toLowerCase());
-            return {
-                isAggregate: false,
-                colName: actualCol ? actualCol.name : cleanColName,
-                alias: alias,
-                raw: rawExpr
-            };
-        }
-
-        computeAggregate(aggType, aggCol, rows, table) {
-            if (aggType === 'COUNT') {
-                if (aggCol === '*') return rows.length;
-                const actualCol = table.columns.find(c => c.name.toLowerCase() === aggCol.toLowerCase());
-                const colName = actualCol ? actualCol.name : aggCol;
-                return rows.filter(r => r[colName] !== null && r[colName] !== undefined).length;
-            }
-
-            const actualCol = table.columns.find(c => c.name.toLowerCase() === aggCol.toLowerCase());
-            const colName = actualCol ? actualCol.name : aggCol;
-            const values = rows
-                .map(r => r[colName])
-                .filter(v => v !== null && v !== undefined);
-
-            if (values.length === 0) return null;
-
-            if (aggType === 'SUM') {
-                return values.reduce((acc, val) => acc + (Number(val) || 0), 0);
-            }
-            if (aggType === 'AVG') {
-                const sum = values.reduce((acc, val) => acc + (Number(val) || 0), 0);
-                const avg = sum / values.length;
-                return Number.isInteger(avg) ? avg : Number(avg.toFixed(2));
-            }
-            if (aggType === 'MIN') {
-                const nums = values.map(Number);
-                if (nums.every(n => !isNaN(n))) {
-                    return Math.min(...nums);
-                }
-                return values.reduce((min, val) => String(val) < String(min) ? val : min, values[0]);
-            }
-            if (aggType === 'MAX') {
-                const nums = values.map(Number);
-                if (nums.every(n => !isNaN(n))) {
-                    return Math.max(...nums);
-                }
-                return values.reduce((max, val) => String(val) > String(max) ? val : max, values[0]);
-            }
-            return null;
-        }
-
-        handleSelect(sql) {
-            if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
-
-            let text = sql.trim().replace(/;?\s*$/, '');
-
-            const fromIdx = text.search(/\bFROM\b/i);
-            if (fromIdx === -1) throw new Error("Sintaxe SELECT incorreta: cláusula 'FROM' não encontrada.");
-
-            const selectPart = text.substring(6, fromIdx).trim();
-            const rest = text.substring(fromIdx + 4).trim();
-
-            const tableMatch = rest.match(/^`?(\w+)`?/);
-            if (!tableMatch) throw new Error("Nome de tabela inválido na cláusula FROM.");
-            const tableName = tableMatch[1];
-
-            const afterTable = rest.substring(tableMatch[0].length).trim();
-
-            let whereClause = null;
-            let groupByClause = null;
-            let havingClause = null;
-            let orderByClause = null;
-            let limitClause = null;
-
-            const clauseKeywords = [
-                { name: 'WHERE', regex: /\bWHERE\b/i },
-                { name: 'GROUP BY', regex: /\bGROUP\s+BY\b/i },
-                { name: 'HAVING', regex: /\bHAVING\b/i },
-                { name: 'ORDER BY', regex: /\bORDER\s+BY\b/i },
-                { name: 'LIMIT', regex: /\bLIMIT\b/i }
-            ];
-
-            let clauseMatches = [];
-            clauseKeywords.forEach(ck => {
-                const match = ck.regex.exec(afterTable);
-                if (match) {
-                    clauseMatches.push({ name: ck.name, index: match.index, length: match[0].length });
-                }
-            });
-
-            clauseMatches.sort((a, b) => a.index - b.index);
-
-            for (let i = 0; i < clauseMatches.length; i++) {
-                const curr = clauseMatches[i];
-                const start = curr.index + curr.length;
-                const end = (i + 1 < clauseMatches.length) ? clauseMatches[i + 1].index : afterTable.length;
-                const content = afterTable.substring(start, end).trim();
-
-                if (curr.name === 'WHERE') whereClause = content;
-                else if (curr.name === 'GROUP BY') groupByClause = content;
-                else if (curr.name === 'HAVING') havingClause = content;
-                else if (curr.name === 'ORDER BY') orderByClause = content;
-                else if (curr.name === 'LIMIT') limitClause = content;
-            }
-
-            const tables = this.databases[this.currentDB].tables;
-            const tableKey = this.getCaseInsensitiveKey(tables, tableName);
-            if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
-
-            const table = tables[tableKey];
-            let resultData = [...table.data];
-
-            // 1. Filtragem WHERE
-            if (whereClause) {
-                resultData = resultData.filter(row => this.evaluateWhere(row, table, whereClause));
-            }
-
-            // 2. Projeção e Agregação
-            let rawSelectItems = selectPart === '*' 
-                ? table.columns.map(c => c.name) 
-                : this.splitByComma(selectPart);
-
-            let parsedItems = rawSelectItems.map(raw => this.parseSelectExpr(raw, table));
-
-            const hasAggregates = parsedItems.some(item => item.isAggregate);
-            const isGrouped = groupByClause !== null || hasAggregates;
-
-            let finalRows = [];
-            let outputColumns = parsedItems.map(i => i.alias);
-
-            if (isGrouped) {
-                const groups = new Map();
-
-                if (groupByClause) {
-                    const groupColInputs = groupByClause.split(',').map(c => c.trim().replace(/`/g, ''));
-                    const actualGroupCols = groupColInputs.map(g => {
-                        const found = table.columns.find(col => col.name.toLowerCase() === g.toLowerCase());
-                        return found ? found.name : g;
-                    });
-
-                    resultData.forEach(row => {
-                        const key = actualGroupCols.map(col => String(row[col] ?? 'NULL')).join('___');
-                        if (!groups.has(key)) groups.set(key, []);
-                        groups.get(key).push(row);
-                    });
-                } else {
-                    groups.set('ALL', resultData);
-                }
-
-                groups.forEach((rowsInGroup) => {
-                    let rowObj = {};
-                    parsedItems.forEach(item => {
-                        if (item.isAggregate) {
-                            rowObj[item.alias] = this.computeAggregate(item.aggType, item.aggCol, rowsInGroup, table);
-                        } else {
-                            const firstRow = rowsInGroup[0];
-                            rowObj[item.alias] = firstRow && firstRow[item.colName] !== undefined ? firstRow[item.colName] : null;
+                    table.columns.forEach(col => {
+                        if (col.notNull && !col.autoIncrement) {
+                            if (newRow[col.name] === null || newRow[col.name] === undefined) {
+                                throw new Error(`A coluna '${col.name}' não pode ser nula (NOT NULL).`);
+                            }
                         }
                     });
-                    finalRows.push(rowObj);
-                });
 
-                if (havingClause) {
-                    finalRows = finalRows.filter(row => this.evaluateHaving(row, havingClause, parsedItems));
+                    // 5. Validação de Restrições CHECK
+                    if (table.checkConstraints && table.checkConstraints.length > 0) {
+                        for (let checkExpr of table.checkConstraints) {
+                            if (!this.evaluateCheckExpression(newRow, table, checkExpr)) {
+                                throw new Error(`Restrição CHECK (${checkExpr}) falhou ao inserir o registro.`);
+                            }
+                        }
+                    }
+
+                    insertedRows.push(newRow);
                 }
-            } else {
-                finalRows = resultData.map(row => {
+
+                table.data.push(...insertedRows);
+                return { type: 'success', message: `${insertedRows.length} linha(s) inserida(s) com sucesso em '${tableKey}'.` };
+            }
+
+            handleSelect(sql) {
+                if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
+
+                const regex = /SELECT\s+(.+)\s+FROM\s+`?(\w+)`?(?:\s+WHERE\s+(.+))?/i;
+                const match = sql.match(regex);
+
+                if (!match) throw new Error("Sintaxe SELECT incorreta. Exemplo: SELECT * FROM tabela WHERE col = 'val';");
+
+                const colsClause = match[1].trim();
+                const tableName = match[2].trim();
+                const whereClause = match[3] ? match[3].trim() : null;
+
+                const tables = this.databases[this.currentDB].tables;
+                const tableKey = this.getCaseInsensitiveKey(tables, tableName);
+                if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
+
+                const table = tables[tableKey];
+                let resultData = [...table.data];
+
+                // Filtro WHERE
+                if (whereClause) {
+                    resultData = resultData.filter(row => this.evaluateWhere(row, table, whereClause));
+                }
+
+                // Seleção de colunas
+                let selectedCols = [];
+                if (colsClause === '*') {
+                    selectedCols = table.columns.map(c => c.name);
+                } else {
+                    const requestedCols = colsClause.split(',').map(c => c.trim().replace(/`/g, ''));
+                    requestedCols.forEach(reqCol => {
+                        const actualCol = table.columns.find(c => c.name.toLowerCase() === reqCol.toLowerCase());
+                        if (actualCol) {
+                            selectedCols.push(actualCol.name);
+                        } else {
+                            selectedCols.push(reqCol); // Mantém caso seja expressão não mapeada
+                        }
+                    });
+                }
+
+                // Projeção dos dados
+                const finalRows = resultData.map(row => {
                     let newRow = {};
-                    parsedItems.forEach(item => {
-                        newRow[item.alias] = row[item.colName] !== undefined ? row[item.colName] : null;
+                    selectedCols.forEach(col => {
+                        newRow[col] = row[col] !== undefined ? row[col] : null;
                     });
                     return newRow;
                 });
+
+                return {
+                    type: 'select',
+                    columns: selectedCols,
+                    data: finalRows,
+                    affectedRows: finalRows.length
+                };
             }
 
-            // ORDER BY
-            if (orderByClause) {
-                const orderMatch = orderByClause.match(/^`?(\w+)`?(?:\s+(ASC|DESC))?/i);
-                if (orderMatch) {
-                    const orderCol = orderMatch[1];
-                    const direction = (orderMatch[2] || 'ASC').toUpperCase();
-                    const actualOrderCol = outputColumns.find(c => c.toLowerCase() === orderCol.toLowerCase()) || orderCol;
-
-                    finalRows.sort((a, b) => {
-                        let valA = a[actualOrderCol];
-                        let valB = b[actualOrderCol];
-                        if (valA === valB) return 0;
-                        if (valA === null || valA === undefined) return 1;
-                        if (valB === null || valB === undefined) return -1;
-                        
-                        if (typeof valA === 'number' && typeof valB === 'number') {
-                            return direction === 'ASC' ? valA - valB : valB - valA;
-                        }
-                        return direction === 'ASC' 
-                            ? String(valA).localeCompare(String(valB)) 
-                            : String(valB).localeCompare(String(valA));
-                    });
-                }
-            }
-
-            // LIMIT
-            if (limitClause) {
-                const limitNum = parseInt(limitClause, 10);
-                if (!isNaN(limitNum) && limitNum >= 0) {
-                    finalRows = finalRows.slice(0, limitNum);
-                }
-            }
-
-            return {
-                type: 'select',
-                columns: outputColumns,
-                data: finalRows,
-                affectedRows: finalRows.length
-            };
-        }
-
-        handleUpdate(sql) {
+            handleUpdate(sql) {
                 if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
 
                 const regex = /UPDATE\s+`?(\w+)`?\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$/i;
@@ -1244,361 +995,92 @@
 
             handleAlter(sql) {
                 if (!this.currentDB) throw new Error("Nenhum banco de dados selecionado.");
+                const regex = /ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+`?(\w+)`?\s+(.+)/i;
+                const match = sql.match(regex);
 
-                const mainMatch = sql.match(/^\s*ALTER\s+TABLE\s+`?(\w+)`?\s+(.+)$/i);
-                if (!mainMatch) {
-                    throw new Error("Sintaxe ALTER TABLE incorreta. Exemplo: ALTER TABLE tabela ADD coluna TIPO;");
-                }
+                if (!match) throw new Error("Sintaxe ALTER TABLE suportada: ALTER TABLE nome ADD col TIPO;");
 
-                const tableName = mainMatch[1];
-                let body = mainMatch[2].trim();
-                if (body.endsWith(';')) body = body.slice(0, -1).trim();
+                const tableName = match[1];
+                const newColName = match[2];
+                const newColType = match[3].replace(';', '').trim().toUpperCase();
 
                 const tables = this.databases[this.currentDB].tables;
-                let tableKey = this.getCaseInsensitiveKey(tables, tableName);
+                const tableKey = this.getCaseInsensitiveKey(tables, tableName);
                 if (!tableKey) throw new Error(`Tabela '${tableName}' não existe.`);
 
-                let table = tables[tableKey];
-
-                // Separa Múltiplas Ações por Vírgula respeitando parênteses ex: DECIMAL(10,2) e CHECK(...)
-                const actions = this.splitByComma(body);
-                const messages = [];
-
-                for (let rawAction of actions) {
-                    const action = rawAction.trim();
-                    if (!action) continue;
-
-                    // 1. RENAME TO / RENAME TABLE
-                    const renameMatch = action.match(/^RENAME\s+(?:TO\s+)?`?(\w+)`?$/i);
-                    if (renameMatch) {
-                        const newTableName = renameMatch[1];
-                        if (this.getCaseInsensitiveKey(tables, newTableName)) {
-                            throw new Error(`Não é possível renomear: a tabela '${newTableName}' já existe.`);
-                        }
-                        delete tables[tableKey];
-                        tables[newTableName] = table;
-                        messages.push(`Tabela renomeada de '${tableKey}' para '${newTableName}'`);
-                        tableKey = newTableName;
-                        continue;
-                    }
-
-                    // 2. RENAME COLUMN old_col TO new_col
-                    const renameColMatch = action.match(/^RENAME\s+COLUMN\s+`?(\w+)`?\s+TO\s+`?(\w+)`?$/i);
-                    if (renameColMatch) {
-                        const oldCol = renameColMatch[1];
-                        const newCol = renameColMatch[2];
-                        const actualCol = table.columns.find(c => c.name.toLowerCase() === oldCol.toLowerCase());
-                        if (!actualCol) throw new Error(`Coluna '${oldCol}' não existe na tabela '${tableKey}'.`);
-                        if (table.columns.some(c => c.name.toLowerCase() === newCol.toLowerCase() && c !== actualCol)) {
-                            throw new Error(`Coluna '${newCol}' já existe na tabela '${tableKey}'.`);
-                        }
-                        const oldName = actualCol.name;
-                        actualCol.name = newCol;
-                        table.data.forEach(row => {
-                            if (Object.prototype.hasOwnProperty.call(row, oldName)) {
-                                row[newCol] = row[oldName];
-                                delete row[oldName];
-                            }
-                        });
-                        messages.push(`Coluna '${oldName}' renomeada para '${newCol}'`);
-                        continue;
-                    }
-
-                    // 3. DROP PRIMARY KEY
-                    if (/^DROP\s+PRIMARY\s+KEY$/i.test(action)) {
-                        table.columns.forEach(c => c.pk = false);
-                        messages.push(`Chave primária removida da tabela '${tableKey}'`);
-                        continue;
-                    }
-
-                    // 4. DROP COLUMN col_name
-                    const dropColMatch = action.match(/^DROP\s+(?:COLUMN\s+)?`?(\w+)`?$/i);
-                    if (dropColMatch) {
-                        const colName = dropColMatch[1];
-                        const colIndex = table.columns.findIndex(c => c.name.toLowerCase() === colName.toLowerCase());
-                        if (colIndex === -1) throw new Error(`Coluna '${colName}' não existe na tabela '${tableKey}'.`);
-                        const removedCol = table.columns.splice(colIndex, 1)[0];
-                        table.data.forEach(row => delete row[removedCol.name]);
-                        messages.push(`Coluna '${removedCol.name}' removida`);
-                        continue;
-                    }
-
-                    // 5. DROP CHECK
-                    const dropCheckMatch = action.match(/^DROP\s+CHECK(?:\s+`?(\w+)`?)?$/i);
-                    if (dropCheckMatch) {
-                        table.checkConstraints = [];
-                        messages.push(`Restrições CHECK removidas da tabela '${tableKey}'`);
-                        continue;
-                    }
-
-                    // 6. ADD PRIMARY KEY (col_name)
-                    const addPkMatch = action.match(/^ADD\s+PRIMARY\s+KEY\s*\(\s*`?(\w+)`?\s*\)$/i);
-                    if (addPkMatch) {
-                        const pkCol = addPkMatch[1];
-                        const actualCol = table.columns.find(c => c.name.toLowerCase() === pkCol.toLowerCase());
-                        if (!actualCol) throw new Error(`Coluna '${pkCol}' não existe na tabela '${tableKey}'.`);
-                        table.columns.forEach(c => c.pk = false);
-                        actualCol.pk = true;
-                        messages.push(`Coluna '${actualCol.name}' definida como PRIMARY KEY`);
-                        continue;
-                    }
-
-                    // 7. ADD [CONSTRAINT] CHECK (expr)
-                    const addCheckMatch = action.match(/^ADD\s+(?:CONSTRAINT\s+`?\w+`?\s+)?CHECK\s*\((.+)\)$/i);
-                    if (addCheckMatch) {
-                        const checkExpr = addCheckMatch[1].trim();
-                        if (!table.checkConstraints) table.checkConstraints = [];
-                        table.checkConstraints.push(checkExpr);
-                        messages.push(`Restrição CHECK (${checkExpr}) adicionada`);
-                        continue;
-                    }
-
-                    // 8. ADD [COLUMN] col_name TIPO [NOT NULL] [FIRST | AFTER col_ref]
-                    const addColMatch = action.match(/^ADD\s+(?:COLUMN\s+)?`?(\w+)`?\s+(.+)$/i);
-                    if (addColMatch) {
-                        const newColName = addColMatch[1];
-                        let rest = addColMatch[2].trim();
-
-                        if (table.columns.some(c => c.name.toLowerCase() === newColName.toLowerCase())) {
-                            throw new Error(`Coluna '${newColName}' já existe na tabela '${tableKey}'.`);
-                        }
-
-                        let pos = -1;
-                        const firstMatch = rest.match(/\s+FIRST$/i);
-                        const afterMatch = rest.match(/\s+AFTER\s+`?(\w+)`?$/i);
-
-                        if (firstMatch) {
-                            pos = 0;
-                            rest = rest.replace(/\s+FIRST$/i, '').trim();
-                        } else if (afterMatch) {
-                            const refCol = afterMatch[1];
-                            const refIdx = table.columns.findIndex(c => c.name.toLowerCase() === refCol.toLowerCase());
-                            if (refIdx === -1) throw new Error(`Coluna de referência '${refCol}' não encontrada.`);
-                            pos = refIdx + 1;
-                            rest = rest.replace(/\s+AFTER\s+`?(\w+)`?$/i, '').trim();
-                        }
-
-                        const upperRest = rest.toUpperCase();
-                        const isPk = upperRest.includes('PRIMARY KEY');
-                        const isAuto = upperRest.includes('AUTO_INCREMENT');
-                        const isNotNull = upperRest.includes('NOT NULL');
-
-                        let typeDef = rest
-                            .replace(/PRIMARY\s+KEY/gi, '')
-                            .replace(/AUTO_INCREMENT/gi, '')
-                            .replace(/NOT\s+NULL/gi, '')
-                            .trim();
-
-                        const colObj = {
-                            name: newColName,
-                            type: typeDef || 'VARCHAR(255)',
-                            pk: isPk,
-                            autoIncrement: isAuto,
-                            notNull: isNotNull
-                        };
-
-                        if (pos === 0) {
-                            table.columns.unshift(colObj);
-                        } else if (pos > 0) {
-                            table.columns.splice(pos, 0, colObj);
-                        } else {
-                            table.columns.push(colObj);
-                        }
-
-                        table.data.forEach(row => row[newColName] = null);
-                        messages.push(`Coluna '${newColName}' (${colObj.type}) adicionada`);
-                        continue;
-                    }
-
-                    // 9. CHANGE [COLUMN] old_col new_col TIPO [NOT NULL] [FIRST | AFTER col_ref]
-                    const changeColMatch = action.match(/^CHANGE\s+(?:COLUMN\s+)?`?(\w+)`?\s+`?(\w+)`?\s+(.+)$/i);
-                    if (changeColMatch) {
-                        const oldColName = changeColMatch[1];
-                        const newColName = changeColMatch[2];
-                        let rest = changeColMatch[3].trim();
-
-                        const actualCol = table.columns.find(c => c.name.toLowerCase() === oldColName.toLowerCase());
-                        if (!actualCol) throw new Error(`Coluna '${oldColName}' não existe na tabela '${tableKey}'.`);
-
-                        if (oldColName.toLowerCase() !== newColName.toLowerCase()) {
-                            if (table.columns.some(c => c.name.toLowerCase() === newColName.toLowerCase())) {
-                                throw new Error(`Coluna '${newColName}' já existe na tabela '${tableKey}'.`);
-                            }
-                        }
-
-                        let pos = -1;
-                        const firstMatch = rest.match(/\s+FIRST$/i);
-                        const afterMatch = rest.match(/\s+AFTER\s+`?(\w+)`?$/i);
-
-                        if (firstMatch) {
-                            pos = 0;
-                            rest = rest.replace(/\s+FIRST$/i, '').trim();
-                        } else if (afterMatch) {
-                            const refCol = afterMatch[1];
-                            const refIdx = table.columns.findIndex(c => c.name.toLowerCase() === refCol.toLowerCase());
-                            if (refIdx === -1) throw new Error(`Coluna de referência '${refCol}' não encontrada.`);
-                            pos = refIdx + 1;
-                            rest = rest.replace(/\s+AFTER\s+`?(\w+)`?$/i, '').trim();
-                        }
-
-                        const upperRest = rest.toUpperCase();
-                        const isPk = upperRest.includes('PRIMARY KEY');
-                        const isAuto = upperRest.includes('AUTO_INCREMENT');
-                        const isNotNull = upperRest.includes('NOT NULL');
-
-                        let typeDef = rest
-                            .replace(/PRIMARY\s+KEY/gi, '')
-                            .replace(/AUTO_INCREMENT/gi, '')
-                            .replace(/NOT\s+NULL/gi, '')
-                            .trim();
-
-                        const oldName = actualCol.name;
-                        actualCol.name = newColName;
-                        if (typeDef) actualCol.type = typeDef;
-                        if (isPk) actualCol.pk = true;
-                        if (isAuto) actualCol.autoIncrement = true;
-                        if (isNotNull) actualCol.notNull = true;
-
-                        if (pos >= 0) {
-                            const currIdx = table.columns.indexOf(actualCol);
-                            table.columns.splice(currIdx, 1);
-                            const targetPos = pos > currIdx ? pos - 1 : pos;
-                            table.columns.splice(targetPos, 0, actualCol);
-                        }
-
-                        if (oldName !== newColName) {
-                            table.data.forEach(row => {
-                                if (Object.prototype.hasOwnProperty.call(row, oldName)) {
-                                    row[newColName] = row[oldName];
-                                    delete row[oldName];
-                                }
-                            });
-                        }
-
-                        messages.push(`Coluna '${oldName}' alterada para '${newColName}' (${actualCol.type})`);
-                        continue;
-                    }
-
-                    // 10. MODIFY [COLUMN] col_name TIPO [NOT NULL] [FIRST | AFTER col_ref]
-                    const modifyColMatch = action.match(/^MODIFY\s+(?:COLUMN\s+)?`?(\w+)`?\s+(.+)$/i);
-                    if (modifyColMatch) {
-                        const colName = modifyColMatch[1];
-                        let rest = modifyColMatch[2].trim();
-
-                        const actualCol = table.columns.find(c => c.name.toLowerCase() === colName.toLowerCase());
-                        if (!actualCol) throw new Error(`Coluna '${colName}' não existe na tabela '${tableKey}'.`);
-
-                        let pos = -1;
-                        const firstMatch = rest.match(/\s+FIRST$/i);
-                        const afterMatch = rest.match(/\s+AFTER\s+`?(\w+)`?$/i);
-
-                        if (firstMatch) {
-                            pos = 0;
-                            rest = rest.replace(/\s+FIRST$/i, '').trim();
-                        } else if (afterMatch) {
-                            const refCol = afterMatch[1];
-                            const refIdx = table.columns.findIndex(c => c.name.toLowerCase() === refCol.toLowerCase());
-                            if (refIdx === -1) throw new Error(`Coluna de referência '${refCol}' não encontrada.`);
-                            pos = refIdx + 1;
-                            rest = rest.replace(/\s+AFTER\s+`?(\w+)`?$/i, '').trim();
-                        }
-
-                        const upperRest = rest.toUpperCase();
-                        const isPk = upperRest.includes('PRIMARY KEY');
-                        const isAuto = upperRest.includes('AUTO_INCREMENT');
-                        const isNotNull = upperRest.includes('NOT NULL');
-
-                        let typeDef = rest
-                            .replace(/PRIMARY\s+KEY/gi, '')
-                            .replace(/AUTO_INCREMENT/gi, '')
-                            .replace(/NOT\s+NULL/gi, '')
-                            .trim();
-
-                        if (typeDef) actualCol.type = typeDef;
-                        if (isNotNull) actualCol.notNull = true;
-                        if (isPk) actualCol.pk = true;
-                        if (isAuto) actualCol.autoIncrement = true;
-
-                        if (pos >= 0) {
-                            const currIdx = table.columns.indexOf(actualCol);
-                            table.columns.splice(currIdx, 1);
-                            const targetPos = pos > currIdx ? pos - 1 : pos;
-                            table.columns.splice(targetPos, 0, actualCol);
-                        }
-
-                        messages.push(`Coluna '${actualCol.name}' alterada para o tipo (${actualCol.type})`);
-                        continue;
-                    }
-
-                    throw new Error(`Sintaxe ALTER TABLE não reconhecida para a ação: '${action}'.`);
+                const table = tables[tableKey];
+                
+                // Verifica se coluna já existe
+                if (table.columns.some(c => c.name.toLowerCase() === newColName.toLowerCase())) {
+                    throw new Error(`Coluna '${newColName}' já existe na tabela '${tableKey}'.`);
                 }
 
-                return { type: 'success', message: messages.join(' | ') || `Tabela '${tableKey}' alterada com sucesso.` };
+                table.columns.push({ name: newColName, type: newColType, pk: false, autoIncrement: false });
+                table.data.forEach(row => row[newColName] = null);
+
+                return { type: 'success', message: `Coluna '${newColName}' adicionada à tabela '${tableKey}'.` };
             }
 
             // Avaliador de expressões WHERE Robusto e Case-Insensitive
             evaluateWhere(row, table, whereClause) {
                 if (!whereClause) return true;
 
-                const evaluateSingleWhere = (clause) => {
-                    const regex = /`?(\w+)`?\s*(=|!=|<>|>=|<=|>|<|LIKE)\s*(.+)/i;
-                    const match = clause.trim().match(regex);
-                    if (!match) return true;
+                // Suporta comparadores =, !=, <>, >, <, >=, <=, LIKE
+                const regex = /`?(\w+)`?\s*(=|!=|<>|>=|<=|>|<|LIKE)\s*(.+)/i;
+                const match = whereClause.match(regex);
 
-                    const colInput = match[1];
-                    const op = match[2].toUpperCase();
-                    let rawVal = match[3].trim();
+                if (!match) return true; // Se a expressão for complexa/não suportada, retorna padrão seguro
 
-                    if ((rawVal.startsWith("'") && rawVal.endsWith("'")) || (rawVal.startsWith('"') && rawVal.endsWith('"'))) {
-                        rawVal = rawVal.slice(1, -1);
-                    } else if (!isNaN(rawVal) && rawVal !== '') {
-                        rawVal = Number(rawVal);
-                    }
+                const colInput = match[1];
+                const op = match[2].toUpperCase();
+                let rawVal = match[3].trim();
 
-                    const actualCol = table.columns.find(c => c.name.toLowerCase() === colInput.toLowerCase());
-                    if (!actualCol) return false;
+                // Limpa aspas do valor
+                if ((rawVal.startsWith("'") && rawVal.endsWith("'")) || (rawVal.startsWith('"') && rawVal.endsWith('"'))) {
+                    rawVal = rawVal.slice(1, -1);
+                } else if (!isNaN(rawVal) && rawVal !== '') {
+                    rawVal = Number(rawVal);
+                }
 
-                    const rowVal = row[actualCol.name];
+                // Identifica a coluna correta independente de Case
+                const actualCol = table.columns.find(c => c.name.toLowerCase() === colInput.toLowerCase());
+                if (!actualCol) return false;
 
-                    if (rowVal === null || rowVal === undefined) {
-                        return op === '!=' || op === '<>';
-                    }
+                const rowVal = row[actualCol.name];
 
-                    if (typeof rowVal === 'string' && typeof rawVal === 'string') {
-                        const rowStr = rowVal.toLowerCase();
-                        const targetStr = rawVal.toLowerCase();
+                // Comparações de NULL
+                if (rowVal === null || rowVal === undefined) {
+                    return op === '!=' || op === '<>';
+                }
 
-                        switch (op) {
-                            case '=': return rowStr === targetStr;
-                            case '!=':
-                            case '<>': return rowStr !== targetStr;
-                            case 'LIKE':
-                                const pattern = targetStr.replace(/%/g, '.*').replace(/_/g, '.');
-                                return new RegExp(`^${pattern}$`, 'i').test(rowStr);
-                            default: return rowStr === targetStr;
-                        }
-                    }
+                // Comparação de Strings Case-Insensitive
+                if (typeof rowVal === 'string' && typeof rawVal === 'string') {
+                    const rowStr = rowVal.toLowerCase();
+                    const targetStr = rawVal.toLowerCase();
 
                     switch (op) {
-                        case '=': return rowVal == rawVal;
+                        case '=': return rowStr === targetStr;
                         case '!=':
-                        case '<>': return rowVal != rawVal;
-                        case '>': return rowVal > rawVal;
-                        case '<': return rowVal < rawVal;
-                        case '>=': return rowVal >= rawVal;
-                        case '<=': return rowVal <= rawVal;
+                        case '<>': return rowStr !== targetStr;
                         case 'LIKE':
-                            return String(rowVal).toLowerCase().includes(String(rawVal).toLowerCase());
-                        default: return rowVal == rawVal;
+                            const pattern = targetStr.replace(/%/g, '.*').replace(/_/g, '.');
+                            return new RegExp(`^${pattern}$`, 'i').test(rowStr);
+                        default: return rowStr === targetStr;
                     }
-                };
+                }
 
-                if (/\bOR\b/i.test(whereClause)) {
-                    return whereClause.split(/\bOR\b/i).some(part => evaluateSingleWhere(part));
-                } else if (/\bAND\b/i.test(whereClause)) {
-                    return whereClause.split(/\bAND\b/i).every(part => evaluateSingleWhere(part));
-                } else {
-                    return evaluateSingleWhere(whereClause);
+                // Comparação Numérica e Genérica
+                switch (op) {
+                    case '=': return rowVal == rawVal;
+                    case '!=':
+                    case '<>': return rowVal != rawVal;
+                    case '>': return rowVal > rawVal;
+                    case '<': return rowVal < rawVal;
+                    case '>=': return rowVal >= rawVal;
+                    case '<=': return rowVal <= rawVal;
+                    case 'LIKE':
+                        return String(rowVal).toLowerCase().includes(String(rawVal).toLowerCase());
+                    default: return rowVal == rawVal;
                 }
             }
         }
@@ -2097,21 +1579,46 @@
 
         const lessons = [
             {
-                title: "8. Variações do ALTER TABLE (ADD, DROP, MODIFY, CHANGE, RENAME)",
-                desc: "Demonstração prática de adição, exclusão, modificação, renomeação de colunas e posicionamento (FIRST/AFTER).",
-                sql: "use escola;\n\n-- 1. Adicionar nova coluna após nome_produto:\nALTER TABLE produtos ADD num_serie VARCHAR(50) AFTER nome_produto;\n\n-- 2. Modificar tipo da coluna quantidade:\nALTER TABLE produtos MODIFY quantidade INT NOT NULL;\n\n-- 3. Renomear e alterar coluna com CHANGE:\nALTER TABLE produtos CHANGE fabricante marca VARCHAR(80);\n\n-- 4. Excluir coluna com DROP:\nALTER TABLE produtos DROP COLUMN num_serie;\n\n-- 5. Renomear a própria tabela:\nALTER TABLE produtos RENAME TO estoque;\n\n-- Visualizar tabela com o novo nome:\nSELECT * FROM estoque;"
+                title: "1. Tabela Produtos com CHECK e NOT NULL",
+                desc: "Exemplo completo de validações de CHECK (quantidade e preço), NOT NULL e INSERT múltiplo.",
+                sql: "use escola;\n\n-- Inserção de múltiplos registros em um único INSERT:\nINSERT INTO produtos (nome_produto, quantidade, fabricante, preco)\nVALUES ('Cadeira Ergonomica', 15, 'Flexform', 899.90),\n       ('Cadeira Flex', 20, 'Flexform', 1899.90);\n\n-- Visualizar resultado:\nSELECT * FROM produtos;"
             },
             {
-                title: "9. Agrupamento com GROUP BY, HAVING e Funções de Agregação",
-                desc: "Agrupe registros e calcule agregações como COUNT, SUM, AVG, MIN e MAX.",
-                sql: "use escola;\n\n-- Agrupar alunos por curso e calcular totais e médias:\nSELECT curso, COUNT(*) AS total_alunos, AVG(idade) AS media_idade\nFROM alunos\nGROUP BY curso;\n\n-- Agrupar produtos por fabricante com filtro HAVING:\nSELECT fabricante, COUNT(*) AS total_itens, SUM(quantidade) AS estoque_total, AVG(preco) AS preco_medio\nFROM produtos\nGROUP BY fabricante\nHAVING total_itens >= 1;"
+                title: "2. Criando e Selecionando BD",
+                desc: "Aprenda a criar um novo banco de dados e defini-lo como ativo (testando minúsculas).",
+                sql: "create database empresa;\nuse EMPRESA;\nshow databases;"
             },
             {
-                title: "10. Agrupamento Avançado (COUNT + SUM com AND no HAVING)",
-                desc: "Filtra agrupamentos usando múltiplas condições no HAVING (COUNT > 2 AND SUM > 1000).",
-                sql: "use escola;\n\nSELECT \n    id_cliente, \n    COUNT(id_cliente) AS total_pedidos, \n    SUM(valor_total) AS faturamento_total\nFROM pedidos\nGROUP BY id_cliente\nHAVING COUNT(id_cliente) > 2 AND SUM(valor_total) > 1000;"
+                title: "3. Criando Tabelas com AUTO_INCREMENT",
+                desc: "Crie uma tabela com chave primária autoincrementável.",
+                sql: "use empresa;\n\ncreate table funcionarios (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  nome VARCHAR(100),\n  cargo VARCHAR(50),\n  salario INT\n);"
+            },
+            {
+                title: "4. Inserindo Dados (INSERT sem informar ID)",
+                desc: "Adicione novos registros omitindo o ID para testar o AUTO_INCREMENT automático.",
+                sql: "use empresa;\n\ninsert into FUNCIONARIOS (nome, cargo, salario) values ('João Silva', 'Desenvolvedor', 5000);\ninsert into funcionarios (NOME, CARGO, SALARIO) values ('Maria Santos', 'Designer', 4200);\nINSERT INTO funcionarios (nome, cargo, salario) VALUES ('Pedro Rocha', 'Gerente', 8000);"
+            },
+            {
+                title: "5. Consultando Dados (SELECT)",
+                desc: "Realize buscas simples e com filtros utilizando cláusula WHERE insensível a maiúsculas.",
+                sql: "use empresa;\n\n-- Buscar todos os registros\nselect * from FUNCIONARIOS;\n\n-- Filtrar por cargo ou salário\nselect nome, cargo from funcionarios where cargo = 'desenvolvedor';"
+            },
+            {
+                title: "6. Atualizando Dados (UPDATE com WHERE)",
+                desc: "Altere dados específicos com UPDATE e filtro WHERE funcionando perfeitamente.",
+                sql: "use empresa;\n\n-- Atualizar apenas quem tem o ID 1\nupdate funcionarios set salario = 6000 where id = 1;\n\n-- Atualizar cargo procurando nome em minúsculo\nUPDATE FUNCIONARIOS SET cargo = 'Líder Design' WHERE nome = 'maria santos';\n\nselect * from funcionarios;"
+            },
+            {
+                title: "7. Excluindo Dados (DELETE)",
+                desc: "Remova registros específicos filtrando no WHERE.",
+                sql: "use empresa;\n\ndelete from funcionarios where id = 2;\n\nselect * from funcionarios;"
             }
         ];
+
+        function renderLessons() {
+            const container = document.getElementById('lessons-list');
+            container.innerHTML = '';
+
             lessons.forEach((l, index) => {
                 const card = document.createElement('div');
                 card.className = "bg-gray-800/60 border border-gray-700/60 p-3 rounded hover:border-teal-500/50 transition space-y-2";
